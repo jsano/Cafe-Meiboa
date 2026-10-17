@@ -2,28 +2,21 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    [SerializeField] CafeHud hud;
+
     CafeSession session;
-    CafeHud hud;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void EnsureRunning()
+    void Awake()
     {
-        if (FindAnyObjectByType<GameManager>() != null)
-            return;
-
-        GameObject host = new GameObject("GameManager");
-        host.AddComponent<GameManager>();
+        if (hud == null)
+            hud = GetComponent<CafeHud>();
     }
 
     void Start()
     {
         session = new CafeSession();
         session.Begin();
-        hud = gameObject.AddComponent<CafeHud>();
-        hud.Build(session);
-
-        if (Camera.main != null)
-            Camera.main.backgroundColor = new Color(0.95f, 0.89f, 0.78f);
+        hud.Bind(session);
     }
 
     void Update()
