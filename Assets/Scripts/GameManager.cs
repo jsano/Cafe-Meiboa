@@ -6,12 +6,6 @@ public class GameManager : MonoBehaviour
 
     CafeSession session;
 
-    void Awake()
-    {
-        if (hud == null)
-            hud = GetComponent<CafeHud>();
-    }
-
     void Start()
     {
         session = new CafeSession();
