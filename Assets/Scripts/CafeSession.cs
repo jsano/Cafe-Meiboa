@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class Customer
 {
@@ -1075,7 +1076,7 @@ public class CafeSession
 
     TipGrade ComputeGrade(Customer cat)
     {
-        float patienceRatio = cat.PatienceMax <= 0f ? 0f : Clamp01(cat.Patience / cat.PatienceMax);
+        float patienceRatio = cat.PatienceMax <= 0f ? 0f : Mathf.Clamp01(cat.Patience / cat.PatienceMax);
         float score;
         if (timingScores.Count == 0)
         {
@@ -1233,12 +1234,4 @@ public class CafeSession
         return "Add syrup.";
     }
 
-    static float Clamp01(float value)
-    {
-        if (value < 0f)
-            return 0f;
-        if (value > 1f)
-            return 1f;
-        return value;
-    }
 }

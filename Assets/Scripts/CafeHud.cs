@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -7,24 +8,24 @@ public class CafeHud : MonoBehaviour
 {
     CafeSession session;
 
-    [SerializeField] Text hudText;
-    [SerializeField] Text leftNote;
+    [SerializeField] TextMeshProUGUI hudText;
+    [SerializeField] TextMeshProUGUI leftNote;
     [SerializeField] GameObject shopRoot;
-    [SerializeField] Text shopHint;
-    [SerializeField] Text beansLabel;
-    [SerializeField] Text milkLabel;
-    [SerializeField] Text syrupLabel;
-    [SerializeField] Text mechanicLabel;
-    [SerializeField] Text fasterLabel;
-    [SerializeField] Text patienceLabel;
-    [SerializeField] Text rentUpgradeLabel;
-    [SerializeField] Text[] pastryLabels = new Text[3];
-    [SerializeField] Text prepShotLabel;
-    [SerializeField] Text prepMilkLabel;
+    [SerializeField] TextMeshProUGUI shopHint;
+    [SerializeField] TextMeshProUGUI beansLabel;
+    [SerializeField] TextMeshProUGUI milkLabel;
+    [SerializeField] TextMeshProUGUI syrupLabel;
+    [SerializeField] TextMeshProUGUI mechanicLabel;
+    [SerializeField] TextMeshProUGUI fasterLabel;
+    [SerializeField] TextMeshProUGUI patienceLabel;
+    [SerializeField] TextMeshProUGUI rentUpgradeLabel;
+    [SerializeField] TextMeshProUGUI[] pastryLabels = new TextMeshProUGUI[3];
+    [SerializeField] TextMeshProUGUI prepShotLabel;
+    [SerializeField] TextMeshProUGUI prepMilkLabel;
     [SerializeField] GameObject dogRow;
     [SerializeField] Button payButton;
-    [SerializeField] Text payLabel;
-    [SerializeField] Text openLabel;
+    [SerializeField] TextMeshProUGUI payLabel;
+    [SerializeField] TextMeshProUGUI openLabel;
 
     [SerializeField] Button beansButton;
     [SerializeField] Button milkButton;
@@ -42,21 +43,21 @@ public class CafeHud : MonoBehaviour
     [SerializeField] Button playAgainButton;
 
     [SerializeField] GameObject stationRoot;
-    [SerializeField] Text stepsText;
+    [SerializeField] TextMeshProUGUI stepsText;
     [SerializeField] RectTransform greenZone;
     [SerializeField] RectTransform marker;
-    [SerializeField] Text actionLabel;
+    [SerializeField] TextMeshProUGUI actionLabel;
     [SerializeField] GameObject repairRoot;
     [SerializeField] Image repairFill;
-    [SerializeField] Text repairCaption;
+    [SerializeField] TextMeshProUGUI repairCaption;
     [SerializeField] HoldButton repairHold;
-    [SerializeField] Text stationStatus;
+    [SerializeField] TextMeshProUGUI stationStatus;
 
     [SerializeField] GameObject closeRoot;
-    [SerializeField] Text closeBody;
-    [SerializeField] Text closeButtonLabel;
+    [SerializeField] TextMeshProUGUI closeBody;
+    [SerializeField] TextMeshProUGUI closeButtonLabel;
     [SerializeField] GameObject summaryRoot;
-    [SerializeField] Text summaryBody;
+    [SerializeField] TextMeshProUGUI summaryBody;
 
     [SerializeField] SlotView[] slotViews = { new SlotView(), new SlotView() };
 
@@ -326,8 +327,8 @@ public class CafeHud : MonoBehaviour
         public Image Body;
         public Image EarLeft;
         public Image EarRight;
-        public Text Bubble;
-        public Text Name;
+        public TextMeshProUGUI Bubble;
+        public TextMeshProUGUI Name;
         public GameObject PatienceRoot;
         public Image PatienceFill;
     }
