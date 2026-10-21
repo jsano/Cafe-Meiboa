@@ -60,6 +60,8 @@ public class TrayCup
     public bool Ice;
     public int Water;
     public int Syrup;
+    public bool Coffee;
+    public bool Shot;
 
     public void Clear()
     {
@@ -69,6 +71,8 @@ public class TrayCup
         Ice = false;
         Water = 0;
         Syrup = 0;
+        Coffee = false;
+        Shot = false;
     }
 
     public void CopyFrom(TrayCup other)
@@ -79,6 +83,8 @@ public class TrayCup
         Ice = other.Ice;
         Water = other.Water;
         Syrup = other.Syrup;
+        Coffee = other.Coffee;
+        Shot = other.Shot;
     }
 }
 
@@ -121,4 +127,9 @@ public static class CafeBalance
     public const float FastMarkerSpeed = 0.95f;
     public const float GreenHalf = 0.11f;
     public const float FastGreenHalf = 0.16f;
+    public const float GrindSeconds = 4f;
+    public const float EspressoSeconds = 4f;
+    public const float CoffeeSeconds = 4f;
+    public const int CoffeeBatch = 4;
+    public const float ToastSeconds = 10f;
 }

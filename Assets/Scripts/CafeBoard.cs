@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 public class CafeBoard : MonoBehaviour
 {
@@ -11,6 +12,7 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] SpriteRenderer dragToken;
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
+    [SerializeField] Collider2D bell;
 
     const float ShopDim = 0.4f;
 
@@ -25,6 +27,7 @@ public class CafeBoard : MonoBehaviour
     readonly List<CafeHotspot> trays = new List<CafeHotspot>();
     SpriteRenderer[] boardSprites = System.Array.Empty<SpriteRenderer>();
     Color[] boardColors = System.Array.Empty<Color>();
+    SpriteRenderer waterMark;
 
     public void Attach(CafeSession cafeSession)
     {
@@ -34,6 +37,8 @@ public class CafeBoard : MonoBehaviour
         if (dragToken != null)
             dragToken.gameObject.SetActive(false);
         WireHotspots();
+        EnsureWaterMark();
+        ResolveBell();
         CacheBoardColors();
         ClampCamera();
         built = true;
@@ -74,9 +79,14 @@ public class CafeBoard : MonoBehaviour
         }
         else if (LeftPressed() && !dragging && !PointerOverUi())
         {
-            CafeHotspot spot = HotspotUnderCursor();
-            if (spot != null)
-                Press(spot);
+            if (BellUnderCursor())
+                session.RingBell();
+            else
+            {
+                CafeHotspot spot = HotspotUnderCursor();
+                if (spot != null)
+                    HandleSpot(spot);
+            }
         }
         else if (dragging && held != null && LeftReleased())
         {
@@ -201,11 +211,62 @@ public class CafeBoard : MonoBehaviour
         for (int i = 0; i < uiHits.Count; i++)
         {
             GameObject hit = uiHits[i].gameObject;
-            if (hit == null || hit.GetComponentInParent<CafeHotspot>() != null)
+            if (hit == null || hit.GetComponentInParent<Graphic>() == null)
                 continue;
             return true;
         }
         return false;
+    }
+
+    void HandleSpot(CafeHotspot spot)
+    {
+        if (MachineBusy(spot.Spot))
+            return;
+        if (IsClick(spot))
+        {
+            Click(spot);
+            return;
+        }
+
+        Press(spot);
+    }
+
+    bool MachineBusy(CafeSpot spot)
+    {
+        if (session == null)
+            return false;
+        if (spot == CafeSpot.Grinder)
+            return session.GrinderBusy;
+        if (spot == CafeSpot.Espresso)
+            return session.EspressoBusy;
+        if (spot == CafeSpot.Toaster)
+            return session.ToasterBusy;
+        if (spot == CafeSpot.Coffee)
+            return session.CoffeeBusy;
+        return false;
+    }
+
+    bool IsClick(CafeHotspot spot)
+    {
+        if (spot.Spot == CafeSpot.WaterHot || spot.Spot == CafeSpot.WaterCold)
+            return true;
+        if (spot.Spot == CafeSpot.WaterTray)
+            return session == null || !session.WaterCup.Occupied;
+        if (spot.Spot == CafeSpot.Coffee)
+            return session == null || session.CoffeeUses <= 0;
+        return false;
+    }
+
+    void Click(CafeHotspot spot)
+    {
+        if (session == null)
+            return;
+        if (spot.Spot == CafeSpot.WaterHot)
+            session.FillWaterCup(true);
+        else if (spot.Spot == CafeSpot.WaterCold)
+            session.FillWaterCup(false);
+        else if (spot.Spot == CafeSpot.Coffee)
+            session.StartCoffee();
     }
 
     public void Press(CafeHotspot spot)
@@ -244,22 +305,37 @@ public class CafeBoard : MonoBehaviour
 
     void Route(CafeHotspot source, CafeHotspot target)
     {
-        if (source.Spot == CafeSpot.Beans && target.Spot == CafeSpot.Coffee)
-            session.BrewCoffee();
-        else if (source.Spot == CafeSpot.Coffee && target.Spot == CafeSpot.Espresso)
-            session.MakeEspresso();
+        if (MachineBusy(target.Spot))
+            return;
+
+        if (source.Spot == CafeSpot.Beans && target.Spot == CafeSpot.Grinder)
+            session.InsertBeans();
+        else if (source.Spot == CafeSpot.CoffeePuck && target.Spot == CafeSpot.Espresso)
+            session.LoadPuck();
+        else if (source.Spot == CafeSpot.CoffeePuck)
+            session.Status = "The puck goes in the espresso machine.";
+        else if (source.Spot == CafeSpot.Espresso && target.Spot == CafeSpot.Tray)
+            session.PourShot(target.Index);
+        else if (source.Spot == CafeSpot.Espresso && target.Spot == CafeSpot.WaterTray)
+            session.PourShotOnWater();
+        else if (source.Spot == CafeSpot.Espresso)
+            session.Status = "The shot goes in a cup.";
+        else if (source.Spot == CafeSpot.Coffee && target.Spot == CafeSpot.Tray)
+            session.PourCoffee(target.Index);
+        else if (source.Spot == CafeSpot.Coffee && target.Spot == CafeSpot.WaterTray)
+            session.PourCoffeeOnWater();
         else if (source.Spot == CafeSpot.CupHot && target.Spot == CafeSpot.Tray)
             session.PlaceCup(true, target.Index);
         else if (source.Spot == CafeSpot.CupCold && target.Spot == CafeSpot.Tray)
             session.PlaceCup(false, target.Index);
+        else if (source.Spot == CafeSpot.CupHot && target.Spot == CafeSpot.WaterTray)
+            session.InsertWaterCup(true);
+        else if (source.Spot == CafeSpot.CupCold && target.Spot == CafeSpot.WaterTray)
+            session.InsertWaterCup(false);
         else if (source.Spot == CafeSpot.Straw && target.Spot == CafeSpot.Tray)
             session.AddStraw(target.Index);
         else if (source.Spot == CafeSpot.Ice && target.Spot == CafeSpot.Tray)
             session.AddIce(target.Index);
-        else if (source.Spot == CafeSpot.WaterHot && target.Spot == CafeSpot.Tray)
-            session.AddWater(target.Index, true);
-        else if (source.Spot == CafeSpot.WaterCold && target.Spot == CafeSpot.Tray)
-            session.AddWater(target.Index, false);
         else if (source.Spot == CafeSpot.Milk && target.Spot == CafeSpot.SteamedMilk)
             session.SteamMilk();
         else if (IsSyrup(source.Spot) && target.Spot == CafeSpot.Tray)
@@ -268,6 +344,12 @@ public class CafeBoard : MonoBehaviour
             session.TrashCup(source.Index);
         else if (source.Spot == CafeSpot.Tray && target.Spot == CafeSpot.Tray)
             session.MoveCup(source.Index, target.Index);
+        else if (source.Spot == CafeSpot.Tray && target.Spot == CafeSpot.WaterTray)
+            session.MoveCupToWater(source.Index);
+        else if (source.Spot == CafeSpot.WaterTray && target.Spot == CafeSpot.Tray)
+            session.PlaceWaterCup(target.Index);
+        else if (source.Spot == CafeSpot.WaterTray && target.Spot == CafeSpot.Trash)
+            session.TrashWaterCup();
         else if (source.Spot == CafeSpot.CroissantPlain && target.Spot == CafeSpot.Toaster)
             session.HeatCroissant(PastryType.Plain);
         else if (source.Spot == CafeSpot.CroissantChocolate && target.Spot == CafeSpot.Toaster)
@@ -280,11 +362,26 @@ public class CafeBoard : MonoBehaviour
 
     bool CanPick(CafeHotspot spot)
     {
+        if (session == null)
+            return false;
+        if (spot.Spot == CafeSpot.Trash
+            || spot.Spot == CafeSpot.Grinder
+            || spot.Spot == CafeSpot.Toaster
+            || spot.Spot == CafeSpot.SteamedMilk
+            || spot.Spot == CafeSpot.WaterHot
+            || spot.Spot == CafeSpot.WaterCold)
+            return false;
+        if (spot.Spot == CafeSpot.Coffee)
+            return session.CoffeeUses > 0 && !session.CoffeeBusy;
+        if (spot.Spot == CafeSpot.CoffeePuck)
+            return session.PuckReady;
+        if (spot.Spot == CafeSpot.Espresso)
+            return session.EspressoShots > 0 && !session.EspressoBusy;
+        if (spot.Spot == CafeSpot.WaterTray)
+            return session.WaterCup.Occupied;
         if (spot.Spot != CafeSpot.Tray)
             return true;
-        if (spot.Spot == CafeSpot.Trash || spot.Spot == CafeSpot.Coffee)
-            return false;
-        if (session == null || spot.Index < 0 || spot.Index >= session.Trays.Length)
+        if (spot.Index < 0 || spot.Index >= session.Trays.Length)
             return false;
         return session.Trays[spot.Index].Occupied;
     }
@@ -366,14 +463,75 @@ public class CafeBoard : MonoBehaviour
             if (!show)
                 continue;
 
-            TrayCup cup = session.Trays[i];
-            Color color = cup.Hot ? new Color(0.93f, 0.35f, 0.30f) : new Color(0.55f, 0.82f, 0.95f);
-            if (cup.Syrup != 0)
-                color = Color.Lerp(color, SyrupColor(cup.Syrup), 0.55f);
-            if (cup.Ice)
-                color = Color.Lerp(color, new Color(0.8f, 0.95f, 1f), 0.35f);
-            cupMarks[i].color = color;
+            cupMarks[i].color = CupTint(session.Trays[i]);
         }
+
+        if (waterMark != null)
+        {
+            bool show = session.WaterCup.Occupied;
+            waterMark.enabled = show;
+            if (show)
+                waterMark.color = CupTint(session.WaterCup);
+        }
+    }
+
+    void EnsureWaterMark()
+    {
+        if (waterMark != null || cupMarks == null || cupMarks.Length == 0 || cupMarks[0] == null)
+            return;
+
+        CafeHotspot tray = null;
+        if (hotspots != null)
+        {
+            for (int i = 0; i < hotspots.Length; i++)
+            {
+                if (hotspots[i] != null && hotspots[i].Spot == CafeSpot.WaterTray)
+                    tray = hotspots[i];
+            }
+        }
+        if (tray == null)
+            return;
+
+        GameObject mark = new GameObject("WaterCupMark");
+        mark.transform.SetParent(tray.transform, false);
+        mark.transform.localPosition = new Vector3(0f, -1.8f, 0f);
+        mark.transform.localScale = cupMarks[0].transform.localScale;
+        waterMark = mark.AddComponent<SpriteRenderer>();
+        waterMark.sprite = cupMarks[0].sprite;
+        waterMark.sortingOrder = 6;
+        waterMark.enabled = false;
+    }
+
+    void ResolveBell()
+    {
+        if (bell != null)
+            return;
+
+        GameObject found = GameObject.Find("Bell");
+        if (found != null)
+            bell = found.GetComponent<Collider2D>();
+    }
+
+    bool BellUnderCursor()
+    {
+        if (bell == null)
+            return false;
+
+        for (int i = 0; i < uiHits.Count; i++)
+        {
+            GameObject hit = uiHits[i].gameObject;
+            if (hit != null && hit.GetComponent<Collider2D>() == bell)
+                return true;
+        }
+
+        Vector3 world = MouseWorld();
+        Collider2D[] hits = Physics2D.OverlapPointAll(world);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (hits[i] == bell)
+                return true;
+        }
+        return false;
     }
 
     CafeHotspot HotspotUnderCursor()
@@ -381,12 +539,18 @@ public class CafeBoard : MonoBehaviour
         Vector3 world = MouseWorld();
         Collider2D[] hits = Physics2D.OverlapPointAll(world);
         CafeHotspot found = null;
+        float bestArea = float.MaxValue;
         for (int i = 0; i < hits.Length; i++)
         {
             CafeHotspot hotspot = hits[i].GetComponent<CafeHotspot>();
             if (hotspot == null || hotspot == held)
                 continue;
+            Vector2 size = hits[i].bounds.size;
+            float area = Mathf.Abs(size.x * size.y);
+            if (found != null && area >= bestArea)
+                continue;
             found = hotspot;
+            bestArea = area;
         }
         return found;
     }
@@ -431,6 +595,10 @@ public class CafeBoard : MonoBehaviour
             return new Color(0.36f, 0.22f, 0.12f);
         if (spot == CafeSpot.Coffee)
             return new Color(0.28f, 0.14f, 0.08f);
+        if (spot == CafeSpot.CoffeePuck)
+            return new Color(0.22f, 0.12f, 0.08f);
+        if (spot == CafeSpot.Espresso)
+            return new Color(0.32f, 0.16f, 0.08f);
         if (spot == CafeSpot.CupHot)
             return new Color(0.92f, 0.32f, 0.28f);
         if (spot == CafeSpot.CupCold)
@@ -454,7 +622,27 @@ public class CafeBoard : MonoBehaviour
         if (IsSyrup(spot))
             return SyrupColor(SyrupId(spot));
         if (spot == CafeSpot.Tray && session != null && index >= 0 && index < session.Trays.Length && session.Trays[index].Occupied)
-            return session.Trays[index].Hot ? new Color(0.92f, 0.32f, 0.28f) : new Color(0.45f, 0.75f, 0.95f);
+            return CupTint(session.Trays[index]);
+        if (spot == CafeSpot.WaterTray && session != null && session.WaterCup.Occupied)
+            return CupTint(session.WaterCup);
         return new Color(0.85f, 0.75f, 0.6f);
+    }
+
+    static Color CupTint(TrayCup cup)
+    {
+        Color color = cup.Hot ? new Color(0.93f, 0.35f, 0.30f) : new Color(0.55f, 0.82f, 0.95f);
+        if (cup.Coffee)
+            color = Color.Lerp(color, new Color(0.28f, 0.14f, 0.08f), 0.65f);
+        if (cup.Shot)
+            color = Color.Lerp(color, new Color(0.18f, 0.08f, 0.04f), 0.45f);
+        if (cup.Water == 1)
+            color = Color.Lerp(color, new Color(0.95f, 0.55f, 0.30f), 0.35f);
+        else if (cup.Water == 2)
+            color = Color.Lerp(color, new Color(0.40f, 0.70f, 0.95f), 0.35f);
+        if (cup.Syrup != 0)
+            color = Color.Lerp(color, SyrupColor(cup.Syrup), 0.55f);
+        if (cup.Ice)
+            color = Color.Lerp(color, new Color(0.8f, 0.95f, 1f), 0.35f);
+        return color;
     }
 }

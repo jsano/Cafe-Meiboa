@@ -92,7 +92,6 @@ public class CafeSession
     bool thiefInserted;
     bool repairHeld;
     float mechanicTimer;
-    float spawnTimer;
 
     public int RentDue => Upgrade == UpgradeType.CheaperRent ? CafeBalance.CheapRentCost : CafeBalance.RentCost;
 
@@ -102,13 +101,25 @@ public class CafeSession
 
     public bool CanOpen => true;
 
-    public int BrewedCoffee;
     public int EspressoShots;
+    public bool GrinderBusy;
+    public float GrinderTimer;
+    public bool PuckReady;
+    public bool EspressoBusy;
+    public float EspressoTimer;
+    public bool ToasterBusy;
+    public float ToasterTimer;
+    public bool CoffeeBusy;
+    public float CoffeeTimer;
+    public int CoffeeUses;
+    public readonly TrayCup WaterCup = new TrayCup();
     public int SteamedServings;
     public int ActiveTray = -1;
     public readonly TrayCup[] Trays = { new TrayCup(), new TrayCup(), new TrayCup() };
 
     bool brewScored;
+    bool waterCupWasActive;
+    PastryType toasting;
 
     public int PastryCount
     {
@@ -158,7 +169,6 @@ public class CafeSession
         thiefInserted = false;
         repairHeld = false;
         mechanicTimer = 0f;
-        spawnTimer = 0f;
         stepIndex = 0;
         markerDir = 1;
         queue.Clear();
@@ -180,9 +190,9 @@ public class CafeSession
             return;
 
         TickRepair(dt);
+        TickMachines(dt);
         TickTiming(dt);
         TickCustomers(dt);
-        TickSpawn(dt);
 
         if (OccupiedCount() == 0 && queue.Count == 0 && !(Day == 2 && !thiefInserted))
             EndShift();
@@ -385,7 +395,6 @@ public class CafeSession
         brewsStarted = 0;
         customersSpawned = 0;
         thiefInserted = false;
-        spawnTimer = 0.35f;
         ShiftEarned = 0;
         ShiftTips = 0;
         ShiftWalkouts = 0;
@@ -398,49 +407,42 @@ public class CafeSession
         {
             MachineBroken = true;
             dayBreakUsed = true;
-            Status = "The dog broke the brewer. Repair it before you brew.";
+            Status = "The dog broke the brewer. Repair it, then ring the bell for a customer.";
         }
         else if (Day == 1)
         {
-            Status = "Drag beans onto coffee, pull espresso, set a cup on a tray, then drag a straw to start the timer.";
+            Status = "Ring the bell for a customer. Grind beans, drop the puck in espresso, drag the shot into a cup, click the coffee pot, then drag a straw to start the timer.";
         }
         else if (Day == 2)
         {
-            Status = "Day 2 is open. The brewer can break, and a thief may grab the till.";
+            Status = "Ring the bell for a customer. The brewer can break, and a thief may grab the till.";
         }
         else
         {
             Status = SyrupUnlocked
-                ? "Day 3 is open. Sweet tooths want syrup coffee."
-                : "Day 3 is open. Syrup is locked, so no sweet tooths.";
+                ? "Ring the bell for a customer. Sweet tooths want syrup coffee."
+                : "Ring the bell for a customer. Syrup is locked, so no sweet tooths.";
         }
 
         ClearStation();
         Phase = DayPhase.Shift;
-        SpawnNext();
-        SpawnNext();
     }
 
-    public void BrewCoffee()
+    public void InsertBeans()
     {
         if (Phase != DayPhase.Shift)
         {
             Status = "Open the cafe first.";
             return;
         }
-        if (MachineBroken)
+        if (GrinderBusy)
         {
-            Status = HasMechanic
-                ? "The mechanic is repairing the brewer."
-                : "Hold Repair until the brewer is fixed.";
+            Status = "The grinder is running.";
             return;
         }
-        if (ShouldBreak())
+        if (PuckReady)
         {
-            MachineBroken = true;
-            dayBreakUsed = true;
-            mechanicTimer = 0f;
-            Status = "The brewer broke.";
+            Status = "Move the puck to the espresso machine.";
             return;
         }
         if (Beans <= 0)
@@ -450,29 +452,226 @@ public class CafeSession
         }
 
         Beans--;
-        BrewedCoffee++;
-        brewsStarted++;
-        Status = "Coffee brewed.";
-        TryFinishDrink();
+        GrinderBusy = true;
+        GrinderTimer = CafeBalance.GrindSeconds;
+        Status = "Grinding beans.";
     }
 
-    public void MakeEspresso()
+    public void LoadPuck()
     {
         if (Phase != DayPhase.Shift)
         {
             Status = "Open the cafe first.";
             return;
         }
-        if (BrewedCoffee <= 0)
+        if (!PuckReady)
         {
-            Status = "Brew coffee before you pull a shot.";
+            Status = "Grind beans before you load a puck.";
+            return;
+        }
+        if (EspressoBusy)
+        {
+            Status = "The espresso machine is running.";
+            return;
+        }
+        if (EspressoShots > 0)
+        {
+            Status = "Take the shot first.";
+            return;
+        }
+        if (RefuseBrokenBrewer())
+            return;
+
+        PuckReady = false;
+        EspressoBusy = true;
+        EspressoTimer = CafeBalance.EspressoSeconds;
+        brewsStarted++;
+        Status = "Pulling a shot.";
+    }
+
+    public void StartCoffee()
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (CoffeeBusy || CoffeeUses > 0)
+            return;
+        if (RefuseBrokenBrewer())
+            return;
+
+        CoffeeBusy = true;
+        CoffeeTimer = CafeBalance.CoffeeSeconds;
+        brewsStarted++;
+        Status = "Brewing coffee.";
+    }
+
+    public void PourShot(int tray)
+    {
+        if (!CupReady(tray))
+            return;
+        if (!PourShotInto(Trays[tray]))
+            return;
+
+        TryFinishDrink();
+    }
+
+    public void PourShotOnWater()
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (!WaterCup.Occupied)
+        {
+            Status = "The water tray is empty.";
             return;
         }
 
-        BrewedCoffee--;
-        EspressoShots++;
-        Status = "Espresso pulled.";
+        PourShotInto(WaterCup);
+    }
+
+    public void PourCoffee(int tray)
+    {
+        if (!CupReady(tray))
+            return;
+        if (!PourInto(Trays[tray]))
+            return;
+
         TryFinishDrink();
+    }
+
+    public void PourCoffeeOnWater()
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (!WaterCup.Occupied)
+        {
+            Status = "The water tray is empty.";
+            return;
+        }
+
+        PourInto(WaterCup);
+    }
+
+    public void InsertWaterCup(bool hot)
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (WaterCup.Occupied)
+        {
+            Status = "Only one cup fits in the water tray.";
+            return;
+        }
+
+        WaterCup.Clear();
+        WaterCup.Occupied = true;
+        WaterCup.Hot = hot;
+        Status = (hot ? "Hot" : "Cold") + " cup in the water tray.";
+    }
+
+    public void FillWaterCup(bool hot)
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (!WaterCup.Occupied)
+        {
+            Status = "The water tray is empty.";
+            return;
+        }
+
+        WaterCup.Water = hot ? 1 : 2;
+        Status = (hot ? "Hot" : "Cold") + " water added.";
+    }
+
+    public void PlaceWaterCup(int tray)
+    {
+        if (!WaterCup.Occupied)
+            return;
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (tray < 0 || tray >= Trays.Length)
+            return;
+        if (Trays[tray].Occupied)
+        {
+            Status = "That tray already has a cup.";
+            return;
+        }
+
+        Trays[tray].CopyFrom(WaterCup);
+        WaterCup.Clear();
+        if (waterCupWasActive)
+            ActiveTray = tray;
+        waterCupWasActive = false;
+        Status = "Cup set on tray " + (tray + 1) + ".";
+        TryFinishDrink();
+    }
+
+    public void MoveCupToWater(int tray)
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (tray < 0 || tray >= Trays.Length || !Trays[tray].Occupied)
+            return;
+        if (WaterCup.Occupied)
+        {
+            Status = "Only one cup fits in the water tray.";
+            return;
+        }
+
+        WaterCup.CopyFrom(Trays[tray]);
+        Trays[tray].Clear();
+        waterCupWasActive = ActiveTray == tray;
+        if (waterCupWasActive)
+            ActiveTray = -1;
+        Status = "Moved the cup to the water tray.";
+    }
+
+    public void TrashWaterCup()
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (!WaterCup.Occupied)
+            return;
+
+        bool cancel = waterCupWasActive || brewScored || FocusReady;
+        WaterCup.Clear();
+        waterCupWasActive = false;
+        if (!cancel)
+        {
+            Status = "Tossed the cup.";
+            return;
+        }
+
+        if (Focus >= 0 && Focus < Slots.Length && Slots[Focus].Occupied)
+            Slots[Focus].DrinkReady = false;
+        BrewTiming = false;
+        brewScored = false;
+        timingScores.Clear();
+        FocusReady = false;
+        BrewLocked = false;
+        ActiveTray = -1;
+        Status = "Tossed the cup. That order is reset.";
     }
 
     public void PlaceCup(bool hot, int tray)
@@ -635,14 +834,21 @@ public class CafeSession
     {
         if (type == PastryType.None)
             return;
-        if (Phase != DayPhase.Shop && Phase != DayPhase.Shift)
+        if (Phase != DayPhase.Shift)
         {
-            Status = "The cafe is closed.";
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (ToasterBusy)
+        {
+            Status = "The toaster is running.";
             return;
         }
 
-        PastryStock[(int)type]++;
-        Status = "Heated a " + PastryName(type).ToLower() + " croissant.";
+        ToasterBusy = true;
+        ToasterTimer = CafeBalance.ToastSeconds;
+        toasting = type;
+        Status = "Toasting a " + PastryName(type).ToLower() + " croissant.";
     }
 
     public void Continue()
@@ -801,11 +1007,36 @@ public class CafeSession
 
     public string StepsLabel()
     {
+        string machines = MachineLine();
         if (FocusReady)
-            return "Ready to serve";
+            return "Ready to serve.  " + machines;
         if (BrewTiming)
-            return "Stop in the green";
-        return "Brewed " + BrewedCoffee + "   Shots " + EspressoShots + "   Steamed " + SteamedServings;
+            return "Stop in the green.  " + machines;
+        return machines;
+    }
+
+    string MachineLine()
+    {
+        string grind = GrinderBusy
+            ? "Grind " + SecondsLeft(GrinderTimer)
+            : (PuckReady ? "Puck ready" : "Grind idle");
+        string shot = EspressoBusy
+            ? "Shot " + SecondsLeft(EspressoTimer)
+            : "Shots " + EspressoShots;
+        string coffee = CoffeeBusy
+            ? "Pot " + SecondsLeft(CoffeeTimer)
+            : "Pot x" + CoffeeUses;
+        string line = grind + "   " + shot + "   " + coffee;
+        if (ToasterBusy)
+            line += "   Toast " + SecondsLeft(ToasterTimer);
+        line += "   Steamed " + SteamedServings;
+        return line;
+    }
+
+    static string SecondsLeft(float seconds)
+    {
+        int left = Mathf.CeilToInt(Mathf.Max(0f, seconds));
+        return left + "s";
     }
 
     public string OrderBubble(Customer cat)
@@ -984,6 +1215,60 @@ public class CafeSession
         }
     }
 
+    void TickMachines(float dt)
+    {
+        if (GrinderBusy)
+        {
+            GrinderTimer -= dt;
+            if (GrinderTimer <= 0f)
+            {
+                GrinderBusy = false;
+                GrinderTimer = 0f;
+                PuckReady = true;
+                Status = "The puck is ready.";
+            }
+        }
+
+        if (EspressoBusy)
+        {
+            EspressoTimer -= dt;
+            if (EspressoTimer <= 0f)
+            {
+                EspressoBusy = false;
+                EspressoTimer = 0f;
+                EspressoShots++;
+                Status = "Espresso is ready.";
+                TryFinishDrink();
+            }
+        }
+
+        if (ToasterBusy)
+        {
+            ToasterTimer -= dt;
+            if (ToasterTimer <= 0f)
+            {
+                ToasterBusy = false;
+                ToasterTimer = 0f;
+                if (toasting != PastryType.None)
+                    PastryStock[(int)toasting]++;
+                Status = "Heated a " + PastryName(toasting).ToLower() + " croissant.";
+                toasting = PastryType.None;
+            }
+        }
+
+        if (CoffeeBusy)
+        {
+            CoffeeTimer -= dt;
+            if (CoffeeTimer <= 0f)
+            {
+                CoffeeBusy = false;
+                CoffeeTimer = 0f;
+                CoffeeUses = CafeBalance.CoffeeBatch;
+                Status = "Coffee is ready. Four pours.";
+            }
+        }
+    }
+
     void TickTiming(float dt)
     {
         if (!BrewTiming || MachineBroken)
@@ -1028,17 +1313,24 @@ public class CafeSession
         }
     }
 
-    void TickSpawn(float dt)
+    public void RingBell()
     {
-        if (OccupiedCount() >= 2 || !HasPendingSpawn())
+        if (Phase != DayPhase.Shift)
             return;
 
-        spawnTimer -= dt;
-        if (spawnTimer > 0f)
+        if (FreeSlot() < 0)
+        {
+            Status = "Both seats are taken.";
             return;
+        }
+
+        if (!HasPendingSpawn())
+        {
+            Status = "No one else is waiting.";
+            return;
+        }
 
         SpawnNext();
-        spawnTimer = 0.45f;
     }
 
     bool HasPendingSpawn()
@@ -1377,13 +1669,133 @@ public class CafeSession
 
     void ClearStation()
     {
-        BrewedCoffee = 0;
         EspressoShots = 0;
         SteamedServings = 0;
         ActiveTray = -1;
         brewScored = false;
+        GrinderBusy = false;
+        GrinderTimer = 0f;
+        PuckReady = false;
+        EspressoBusy = false;
+        EspressoTimer = 0f;
+        ToasterBusy = false;
+        ToasterTimer = 0f;
+        toasting = PastryType.None;
+        CoffeeBusy = false;
+        CoffeeTimer = 0f;
+        CoffeeUses = 0;
+        WaterCup.Clear();
+        waterCupWasActive = false;
         for (int i = 0; i < Trays.Length; i++)
             Trays[i].Clear();
+    }
+
+    bool RefuseBrokenBrewer()
+    {
+        if (MachineBroken)
+        {
+            Status = HasMechanic
+                ? "The mechanic is repairing the brewer."
+                : "Hold Repair until the brewer is fixed.";
+            return true;
+        }
+        if (!ShouldBreak())
+            return false;
+
+        MachineBroken = true;
+        dayBreakUsed = true;
+        mechanicTimer = 0f;
+        Status = "The brewer broke.";
+        return true;
+    }
+
+    bool PourShotInto(TrayCup cup)
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return false;
+        }
+        if (EspressoBusy || EspressoShots <= 0)
+        {
+            Status = "Pull a shot first.";
+            return false;
+        }
+        if (cup == null || !cup.Occupied)
+        {
+            Status = "That needs a cup.";
+            return false;
+        }
+        if (cup.Shot)
+        {
+            Status = "That cup already has a shot.";
+            return false;
+        }
+
+        cup.Shot = true;
+        EspressoShots--;
+        Status = "Shot poured.";
+        return true;
+    }
+
+    bool PourInto(TrayCup cup)
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return false;
+        }
+        if (CoffeeBusy || CoffeeUses <= 0)
+        {
+            Status = "Brew coffee first.";
+            return false;
+        }
+        if (cup == null || !cup.Occupied)
+        {
+            Status = "That needs a cup.";
+            return false;
+        }
+        if (cup.Coffee)
+        {
+            Status = "That cup already has coffee.";
+            return false;
+        }
+
+        cup.Coffee = true;
+        CoffeeUses--;
+        Status = CoffeeUses > 0
+            ? "Coffee poured. " + CoffeeUses + " left."
+            : "Coffee poured. Click the pot to brew more.";
+        return true;
+    }
+
+    bool NeedsPotCoffee(Customer cat)
+    {
+        return cat.Drink == DrinkType.Coffee || cat.Drink == DrinkType.SyrupCoffee;
+    }
+
+    int CupIndexForServe(bool needCoffee, bool needShot = false)
+    {
+        if (ActiveTray >= 0 && ActiveTray < Trays.Length && Trays[ActiveTray].Occupied)
+        {
+            if (needCoffee && !Trays[ActiveTray].Coffee)
+                return -1;
+            if (needShot && !Trays[ActiveTray].Shot)
+                return -1;
+            return ActiveTray;
+        }
+
+        for (int i = 0; i < Trays.Length; i++)
+        {
+            if (!Trays[i].Occupied)
+                continue;
+            if (needCoffee && !Trays[i].Coffee)
+                continue;
+            if (needShot && !Trays[i].Shot)
+                continue;
+            return i;
+        }
+        return -1;
     }
 
     void ClearServedCup()
@@ -1449,19 +1861,21 @@ public class CafeSession
 
         bool spareShot = Prep == PrepType.Espresso;
         bool spareMilk = Prep == PrepType.SteamedMilk && cat.Drink == DrinkType.Latte;
-        if (!AnyOccupiedTray())
+        bool needCoffee = NeedsPotCoffee(cat);
+        int tray = CupIndexForServe(needCoffee, !spareShot);
+        if (tray < 0)
             return false;
-        if (!spareShot && (EspressoShots <= 0 || !brewScored))
+        if (!spareShot && !brewScored)
             return false;
         if (cat.Drink == DrinkType.Latte && !spareMilk && SteamedServings <= 0)
             return false;
         if (cat.Drink == DrinkType.SyrupCoffee && !AnySyrup())
             return false;
 
+        ActiveTray = tray;
+
         if (spareShot)
             Prep = PrepType.None;
-        else
-            EspressoShots--;
 
         if (cat.Drink == DrinkType.Latte)
         {
@@ -1485,9 +1899,23 @@ public class CafeSession
             return "Take an order.";
         if (!AnyOccupiedTray())
             return "Set a cup on a tray.";
-        if (Prep != PrepType.Espresso && EspressoShots <= 0)
-            return "Pull an espresso shot.";
+        if (Prep != PrepType.Espresso && CupIndexForServe(false, true) < 0)
+        {
+            if (EspressoBusy)
+                return "The shot is pulling.";
+            if (EspressoShots <= 0)
+                return "Pull an espresso shot.";
+            return "Drag the shot into the cup.";
+        }
         Customer cat = Slots[Focus];
+        if (NeedsPotCoffee(cat) && CupIndexForServe(true) < 0)
+        {
+            if (CoffeeBusy)
+                return "Coffee is brewing.";
+            if (CoffeeUses <= 0)
+                return "Click the coffee pot.";
+            return "Pour coffee into the cup.";
+        }
         if (cat.Drink == DrinkType.Latte && Prep != PrepType.SteamedMilk && SteamedServings <= 0)
             return "Steam some milk.";
         if (cat.Drink == DrinkType.SyrupCoffee && !AnySyrup())

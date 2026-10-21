@@ -122,6 +122,7 @@ public class CafeHud : MonoBehaviour
         hudText.text = "Day " + session.Day
             + "   $" + session.Cash
             + "   Beans " + session.Beans
+            + "   Coffee " + (session.CoffeeBusy ? Mathf.CeilToInt(session.CoffeeTimer) + "s" : session.CoffeeUses.ToString())
             + "   Milk " + session.Milk
             + "   Pastry " + session.PastryCount
             + "   " + session.QuestLabel()
