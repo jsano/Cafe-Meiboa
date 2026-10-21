@@ -22,7 +22,8 @@ public enum CafeSpot
     Toaster,
     CroissantPlain,
     CroissantChocolate,
-    CroissantCheese
+    CroissantCheese,
+    Puck
 }
 
 public class CafeHotspot : MonoBehaviour

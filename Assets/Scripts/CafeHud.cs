@@ -120,13 +120,13 @@ public class CafeHud : MonoBehaviour
         leftNote.gameObject.SetActive(!shift);
 
         hudText.text = "Day " + session.Day
-            + "    $" + session.Cash
-            + "    Beans " + session.Beans
-            + "    Milk " + session.Milk
-            + "    Pastry " + session.PastryCount
-            + "    " + session.QuestLabel()
-            + "    Prep " + session.PrepLabel()
-            + "    " + (session.MachineBroken ? "Brewer BROKEN" : "Brewer ok");
+            + "   $" + session.Cash
+            + "   Beans " + session.Beans
+            + "   Milk " + session.Milk
+            + "   Pastry " + session.PastryCount
+            + "   " + session.QuestLabel()
+            + "   Prep " + session.PrepLabel()
+            + "   " + (session.MachineBroken ? "Brewer BROKEN" : "Brewer ok");
 
         if (shop)
             RefreshShop();
@@ -279,16 +279,11 @@ public class CafeHud : MonoBehaviour
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
 
-        Image background = stationRoot.GetComponent<Image>();
-        if (background != null)
-            background.raycastTarget = false;
-
         Graphic[] graphics = stationRoot.GetComponentsInChildren<Graphic>(true);
         for (int i = 0; i < graphics.Length; i++)
         {
-            if (graphics[i].GetComponentInParent<Button>() != null)
-                continue;
-            graphics[i].raycastTarget = false;
+            bool onButton = graphics[i].GetComponentInParent<Button>(true) != null;
+            graphics[i].raycastTarget = onButton;
         }
     }
 

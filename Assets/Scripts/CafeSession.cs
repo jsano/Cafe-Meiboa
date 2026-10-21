@@ -1556,17 +1556,6 @@ public class CafeSession
         return "None";
     }
 
-    static string StepName(BrewStep step)
-    {
-        if (step == BrewStep.Beans)
-            return "Beans";
-        if (step == BrewStep.Brew)
-            return "Brew";
-        if (step == BrewStep.Milk)
-            return "Milk";
-        return "Syrup";
-    }
-
     static string StepPrompt(BrewStep step)
     {
         if (step == BrewStep.Beans)

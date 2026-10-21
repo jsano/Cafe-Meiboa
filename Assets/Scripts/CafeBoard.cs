@@ -12,6 +12,8 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
 
+    const float ShopDim = 0.4f;
+
     CafeSession session;
     bool built;
     bool dragging;
@@ -21,6 +23,8 @@ public class CafeBoard : MonoBehaviour
     CafeHotspot held;
     Transform ghost;
     readonly List<CafeHotspot> trays = new List<CafeHotspot>();
+    SpriteRenderer[] boardSprites = System.Array.Empty<SpriteRenderer>();
+    Color[] boardColors = System.Array.Empty<Color>();
 
     public void Attach(CafeSession cafeSession)
     {
@@ -30,6 +34,7 @@ public class CafeBoard : MonoBehaviour
         if (dragToken != null)
             dragToken.gameObject.SetActive(false);
         WireHotspots();
+        CacheBoardColors();
         ClampCamera();
         built = true;
     }
@@ -60,8 +65,14 @@ public class CafeBoard : MonoBehaviour
         if (!built)
             return;
 
+        bool shop = session != null && session.Phase == DayPhase.Shop;
         Pan();
-        if (LeftPressed() && !dragging && !PointerOverUi())
+        if (shop)
+        {
+            if (dragging)
+                CancelDrag();
+        }
+        else if (LeftPressed() && !dragging && !PointerOverUi())
         {
             CafeHotspot spot = HotspotUnderCursor();
             if (spot != null)
@@ -73,6 +84,81 @@ public class CafeBoard : MonoBehaviour
         }
         FollowGhost();
         SyncCups();
+        ApplyDim(shop);
+    }
+
+    void CacheBoardColors()
+    {
+        boardSprites = System.Array.Empty<SpriteRenderer>();
+        boardColors = System.Array.Empty<Color>();
+        if (backdrop == null)
+            return;
+
+        SpriteRenderer[] all = backdrop.GetComponentsInChildren<SpriteRenderer>(true);
+        int count = 0;
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (!IsCupMark(all[i]))
+                count++;
+        }
+
+        boardSprites = new SpriteRenderer[count];
+        boardColors = new Color[count];
+        int write = 0;
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (IsCupMark(all[i]))
+                continue;
+            boardSprites[write] = all[i];
+            boardColors[write] = all[i].color;
+            write++;
+        }
+    }
+
+    bool IsCupMark(SpriteRenderer renderer)
+    {
+        if (cupMarks == null || renderer == null)
+            return false;
+        for (int i = 0; i < cupMarks.Length; i++)
+        {
+            if (cupMarks[i] == renderer)
+                return true;
+        }
+        return false;
+    }
+
+    void ApplyDim(bool shop)
+    {
+        float mul = shop ? ShopDim : 1f;
+        for (int i = 0; i < boardSprites.Length; i++)
+        {
+            SpriteRenderer renderer = boardSprites[i];
+            if (renderer == null)
+                continue;
+            Color color = boardColors[i];
+            renderer.color = new Color(color.r * mul, color.g * mul, color.b * mul, color.a);
+        }
+
+        if (!shop || cupMarks == null)
+            return;
+
+        for (int i = 0; i < cupMarks.Length; i++)
+        {
+            SpriteRenderer mark = cupMarks[i];
+            if (mark == null || !mark.enabled)
+                continue;
+            Color color = mark.color;
+            mark.color = new Color(color.r * ShopDim, color.g * ShopDim, color.b * ShopDim, color.a);
+        }
+    }
+
+    void CancelDrag()
+    {
+        dragging = false;
+        held = null;
+        ghost = null;
+        if (dragToken != null)
+            dragToken.gameObject.SetActive(false);
     }
 
     static Vector2 PointerScreen()
@@ -196,6 +282,8 @@ public class CafeBoard : MonoBehaviour
     {
         if (spot.Spot != CafeSpot.Tray)
             return true;
+        if (spot.Spot == CafeSpot.Trash || spot.Spot == CafeSpot.Coffee)
+            return false;
         if (session == null || spot.Index < 0 || spot.Index >= session.Trays.Length)
             return false;
         return session.Trays[spot.Index].Occupied;
