@@ -3,6 +3,7 @@ using UnityEngine;
 public class GameManager : MonoBehaviour
 {
     [SerializeField] CafeHud hud;
+    [SerializeField] CafeBoard board;
 
     CafeSession session;
 
@@ -11,6 +12,8 @@ public class GameManager : MonoBehaviour
         session = new CafeSession();
         session.Begin();
         hud.Bind(session);
+        if (board != null)
+            board.Attach(session);
     }
 
     void Update()

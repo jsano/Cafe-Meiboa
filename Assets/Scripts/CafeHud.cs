@@ -86,6 +86,7 @@ public class CafeHud : MonoBehaviour
         Wire(actionButton, session.PressStation);
         Wire(closeButton, session.Continue);
         Wire(playAgainButton, session.Begin);
+        PrepareStationForDrag();
         for (int i = 0; i < slotViews.Length; i++)
         {
             int slot = i;
@@ -138,7 +139,7 @@ public class CafeHud : MonoBehaviour
 
         if (!shift)
             leftNote.text = shop
-                ? "The counter is closed.\nStock the right side, bake 3 croissants, then open."
+                ? "The counter is closed.\nStock the right side, then open when you are ready."
                 : "";
 
         for (int i = 0; i < slotViews.Length; i++)
@@ -172,9 +173,7 @@ public class CafeHud : MonoBehaviour
             ? "Rent paid"
             : "Pay the black dog  ($" + session.RentDue + ")";
 
-        if (!session.CanOpen)
-            openLabel.text = "Bake 3 croissants to open";
-        else if (session.Day == 3 && !session.RentPaid)
+        if (session.Day == 3 && !session.RentPaid)
             openLabel.text = "Open anyway";
         else
             openLabel.text = "Open cafe";
@@ -198,6 +197,9 @@ public class CafeHud : MonoBehaviour
         marker.offsetMin = new Vector2(-6f, 0f);
         marker.offsetMax = new Vector2(6f, 0f);
         marker.gameObject.SetActive(session.BrewTiming);
+
+        if (actionButton != null)
+            actionButton.gameObject.SetActive(session.BrewTiming);
 
         bool showRepair = session.MachineBroken;
         repairRoot.SetActive(showRepair);
@@ -266,6 +268,30 @@ public class CafeHud : MonoBehaviour
         closeButtonLabel.text = session.Day >= 3 ? "See the summary" : "Back to the shop";
     }
 
+    void PrepareStationForDrag()
+    {
+        if (stationRoot == null)
+            return;
+
+        RectTransform rect = stationRoot.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.62f, 0.5f);
+        rect.anchorMax = new Vector2(0.99f, 0.92f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        Image background = stationRoot.GetComponent<Image>();
+        if (background != null)
+            background.raycastTarget = false;
+
+        Graphic[] graphics = stationRoot.GetComponentsInChildren<Graphic>(true);
+        for (int i = 0; i < graphics.Length; i++)
+        {
+            if (graphics[i].GetComponentInParent<Button>() != null)
+                continue;
+            graphics[i].raycastTarget = false;
+        }
+    }
+
     string SummaryText()
     {
         string quest = session.QuestComplete ? "Cleared" : "Not cleared";
@@ -283,21 +309,11 @@ public class CafeHud : MonoBehaviour
     {
         if (session.MachineBroken)
             return session.HasMechanic ? "Mechanic is repairing" : "Brewer broken";
-        if (session.Focus < 0)
-            return "Take an order";
-        if (session.FocusReady)
-            return "Click the cat to serve";
-        if (!session.BrewLocked)
-            return "Start drink";
         if (session.BrewTiming)
             return "Stop";
-        if (session.CurrentStep == BrewStep.Beans)
-            return "Add beans";
-        if (session.CurrentStep == BrewStep.Milk)
-            return "Steam milk";
-        if (session.CurrentStep == BrewStep.Syrup)
-            return "Add syrup";
-        return "Start brew";
+        if (session.FocusReady)
+            return "Click the cat to serve";
+        return "Drag a straw to time";
     }
 
     string UpgradeButton(string title, string detail, UpgradeType type)

@@ -52,6 +52,36 @@ public enum BrewStep
     Syrup
 }
 
+public class TrayCup
+{
+    public bool Occupied;
+    public bool Hot;
+    public bool Straw;
+    public bool Ice;
+    public int Water;
+    public int Syrup;
+
+    public void Clear()
+    {
+        Occupied = false;
+        Hot = false;
+        Straw = false;
+        Ice = false;
+        Water = 0;
+        Syrup = 0;
+    }
+
+    public void CopyFrom(TrayCup other)
+    {
+        Occupied = other.Occupied;
+        Hot = other.Hot;
+        Straw = other.Straw;
+        Ice = other.Ice;
+        Water = other.Water;
+        Syrup = other.Syrup;
+    }
+}
+
 public enum TipGrade
 {
     None,
