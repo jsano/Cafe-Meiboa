@@ -109,6 +109,8 @@ public class CafeSession
     public float EspressoTimer;
     public bool ToasterBusy;
     public float ToasterTimer;
+    public PastryType ToasterReady;
+    public PastryType Plated;
     public bool CoffeeBusy;
     public float CoffeeTimer;
     public int CoffeeUses;
@@ -128,6 +130,10 @@ public class CafeSession
             int total = 0;
             for (int i = 1; i < PastryStock.Length; i++)
                 total += PastryStock[i];
+            if (Plated != PastryType.None)
+                total++;
+            if (ToasterReady != PastryType.None)
+                total++;
             return total;
         }
     }
@@ -839,9 +845,11 @@ public class CafeSession
             Status = "Open the cafe first.";
             return;
         }
-        if (ToasterBusy)
+        if (ToasterBusy || ToasterReady != PastryType.None)
         {
-            Status = "The toaster is running.";
+            Status = ToasterReady != PastryType.None
+                ? "Take the croissant out first."
+                : "The toaster is running.";
             return;
         }
 
@@ -849,6 +857,29 @@ public class CafeSession
         ToasterTimer = CafeBalance.ToastSeconds;
         toasting = type;
         Status = "Toasting a " + PastryName(type).ToLower() + " croissant.";
+    }
+
+    public void PlateCroissant()
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (ToasterReady == PastryType.None)
+        {
+            Status = "The toaster is empty.";
+            return;
+        }
+        if (Plated != PastryType.None)
+        {
+            Status = "The plate already has a croissant.";
+            return;
+        }
+
+        Plated = ToasterReady;
+        ToasterReady = PastryType.None;
+        Status = PastryName(Plated) + " croissant is on the plate.";
     }
 
     public void Continue()
@@ -1029,6 +1060,10 @@ public class CafeSession
         string line = grind + "   " + shot + "   " + coffee;
         if (ToasterBusy)
             line += "   Toast " + SecondsLeft(ToasterTimer);
+        else if (ToasterReady != PastryType.None)
+            line += "   Toast ready";
+        if (Plated != PastryType.None)
+            line += "   Plate full";
         line += "   Steamed " + SteamedServings;
         return line;
     }
@@ -1249,10 +1284,11 @@ public class CafeSession
             {
                 ToasterBusy = false;
                 ToasterTimer = 0f;
-                if (toasting != PastryType.None)
-                    PastryStock[(int)toasting]++;
-                Status = "Heated a " + PastryName(toasting).ToLower() + " croissant.";
+                ToasterReady = toasting;
                 toasting = PastryType.None;
+                Status = ToasterReady == PastryType.None
+                    ? "The toaster is empty."
+                    : "Croissant is ready. Drag it to the plate.";
             }
         }
 
@@ -1554,10 +1590,24 @@ public class CafeSession
 
     bool TryTakePastry(PastryType wanted, out bool exact)
     {
+        if (Plated == wanted)
+        {
+            Plated = PastryType.None;
+            exact = true;
+            return true;
+        }
+
         if (PastryStock[(int)wanted] > 0)
         {
             PastryStock[(int)wanted]--;
             exact = true;
+            return true;
+        }
+
+        if (Plated != PastryType.None)
+        {
+            Plated = PastryType.None;
+            exact = false;
             return true;
         }
 
@@ -1680,6 +1730,12 @@ public class CafeSession
         EspressoTimer = 0f;
         ToasterBusy = false;
         ToasterTimer = 0f;
+        if (ToasterReady != PastryType.None)
+            PastryStock[(int)ToasterReady]++;
+        if (Plated != PastryType.None)
+            PastryStock[(int)Plated]++;
+        ToasterReady = PastryType.None;
+        Plated = PastryType.None;
         toasting = PastryType.None;
         CoffeeBusy = false;
         CoffeeTimer = 0f;

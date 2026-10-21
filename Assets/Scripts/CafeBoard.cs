@@ -28,6 +28,8 @@ public class CafeBoard : MonoBehaviour
     SpriteRenderer[] boardSprites = System.Array.Empty<SpriteRenderer>();
     Color[] boardColors = System.Array.Empty<Color>();
     SpriteRenderer waterMark;
+    SpriteRenderer plateMark;
+    SpriteRenderer toastMark;
 
     public void Attach(CafeSession cafeSession)
     {
@@ -38,6 +40,7 @@ public class CafeBoard : MonoBehaviour
             dragToken.gameObject.SetActive(false);
         WireHotspots();
         EnsureWaterMark();
+        EnsurePastryMarks();
         ResolveBell();
         CacheBoardColors();
         ClampCamera();
@@ -213,6 +216,8 @@ public class CafeBoard : MonoBehaviour
             GameObject hit = uiHits[i].gameObject;
             if (hit == null || hit.GetComponentInParent<Graphic>() == null)
                 continue;
+            if (hit.GetComponentInParent<CafeHotspot>() != null)
+                continue;
             return true;
         }
         return false;
@@ -356,6 +361,10 @@ public class CafeBoard : MonoBehaviour
             session.HeatCroissant(PastryType.Chocolate);
         else if (source.Spot == CafeSpot.CroissantCheese && target.Spot == CafeSpot.Toaster)
             session.HeatCroissant(PastryType.Cheese);
+        else if (source.Spot == CafeSpot.Toaster && target.Spot == CafeSpot.Plate)
+            session.PlateCroissant();
+        else if (source.Spot == CafeSpot.Toaster)
+            session.Status = "The croissant goes on the plate.";
         else
             session.Status = "That doesn't go there.";
     }
@@ -366,10 +375,10 @@ public class CafeBoard : MonoBehaviour
             return false;
         if (spot.Spot == CafeSpot.Trash
             || spot.Spot == CafeSpot.Grinder
-            || spot.Spot == CafeSpot.Toaster
             || spot.Spot == CafeSpot.SteamedMilk
             || spot.Spot == CafeSpot.WaterHot
-            || spot.Spot == CafeSpot.WaterCold)
+            || spot.Spot == CafeSpot.WaterCold
+            || spot.Spot == CafeSpot.Plate)
             return false;
         if (spot.Spot == CafeSpot.Coffee)
             return session.CoffeeUses > 0 && !session.CoffeeBusy;
@@ -377,6 +386,8 @@ public class CafeBoard : MonoBehaviour
             return session.PuckReady;
         if (spot.Spot == CafeSpot.Espresso)
             return session.EspressoShots > 0 && !session.EspressoBusy;
+        if (spot.Spot == CafeSpot.Toaster)
+            return session.ToasterReady != PastryType.None && !session.ToasterBusy;
         if (spot.Spot == CafeSpot.WaterTray)
             return session.WaterCup.Occupied;
         if (spot.Spot != CafeSpot.Tray)
@@ -473,6 +484,48 @@ public class CafeBoard : MonoBehaviour
             if (show)
                 waterMark.color = CupTint(session.WaterCup);
         }
+
+        SyncPastryMark(plateMark, session.Plated);
+        SyncPastryMark(toastMark, session.ToasterReady);
+    }
+
+    static void SyncPastryMark(SpriteRenderer mark, PastryType pastry)
+    {
+        if (mark == null)
+            return;
+        bool show = pastry != PastryType.None;
+        mark.enabled = show;
+        if (show)
+            mark.color = CroissantColor(pastry);
+    }
+
+    void EnsurePastryMarks()
+    {
+        if (cupMarks == null || cupMarks.Length == 0 || cupMarks[0] == null || hotspots == null)
+            return;
+
+        for (int i = 0; i < hotspots.Length; i++)
+        {
+            CafeHotspot hotspot = hotspots[i];
+            if (hotspot == null)
+                continue;
+            if (hotspot.Spot == CafeSpot.Plate && plateMark == null)
+                plateMark = MakePastryMark(hotspot.transform, "PlateMark");
+            if (hotspot.Spot == CafeSpot.Toaster && toastMark == null)
+                toastMark = MakePastryMark(hotspot.transform, "ToastMark");
+        }
+    }
+
+    SpriteRenderer MakePastryMark(Transform parent, string name)
+    {
+        GameObject mark = new GameObject(name);
+        mark.transform.SetParent(parent, false);
+        mark.transform.localScale = cupMarks[0].transform.localScale * 0.65f;
+        SpriteRenderer renderer = mark.AddComponent<SpriteRenderer>();
+        renderer.sprite = cupMarks[0].sprite;
+        renderer.sortingOrder = 6;
+        renderer.enabled = false;
+        return renderer;
     }
 
     void EnsureWaterMark()
@@ -619,6 +672,8 @@ public class CafeBoard : MonoBehaviour
             return new Color(0.55f, 0.32f, 0.18f);
         if (spot == CafeSpot.CroissantCheese)
             return new Color(0.95f, 0.82f, 0.35f);
+        if (spot == CafeSpot.Toaster && session != null)
+            return CroissantColor(session.ToasterReady);
         if (IsSyrup(spot))
             return SyrupColor(SyrupId(spot));
         if (spot == CafeSpot.Tray && session != null && index >= 0 && index < session.Trays.Length && session.Trays[index].Occupied)
@@ -644,5 +699,16 @@ public class CafeBoard : MonoBehaviour
         if (cup.Ice)
             color = Color.Lerp(color, new Color(0.8f, 0.95f, 1f), 0.35f);
         return color;
+    }
+
+    static Color CroissantColor(PastryType pastry)
+    {
+        if (pastry == PastryType.Chocolate)
+            return new Color(0.55f, 0.32f, 0.18f);
+        if (pastry == PastryType.Cheese)
+            return new Color(0.95f, 0.82f, 0.35f);
+        if (pastry == PastryType.Plain)
+            return new Color(0.93f, 0.78f, 0.45f);
+        return new Color(0.85f, 0.75f, 0.6f);
     }
 }
