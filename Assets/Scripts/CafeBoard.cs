@@ -10,6 +10,11 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] Camera cam;
     [SerializeField] Transform backdrop;
     [SerializeField] SpriteRenderer dragToken;
+    [SerializeField] Sprite hotCupSprite;
+    [SerializeField] Sprite coldCupSprite;
+    [SerializeField] Sprite plainCroissantSprite;
+    [SerializeField] Sprite chocolateCroissantSprite;
+    [SerializeField] Sprite cheeseCroissantSprite;
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
@@ -30,6 +35,8 @@ public class CafeBoard : MonoBehaviour
     SpriteRenderer waterMark;
     SpriteRenderer plateMark;
     SpriteRenderer toastMark;
+    Sprite placeholderSprite;
+    Vector3 placeholderScale;
 
     public void Attach(CafeSession cafeSession)
     {
@@ -37,10 +44,13 @@ public class CafeBoard : MonoBehaviour
         if (cam == null)
             cam = Camera.main;
         if (dragToken != null)
+        {
+            placeholderSprite = dragToken.sprite;
+            placeholderScale = dragToken.transform.localScale;
             dragToken.gameObject.SetActive(false);
+        }
         WireHotspots();
-        EnsureWaterMark();
-        EnsurePastryMarks();
+        EnsureStationMarks();
         ResolveBell();
         CacheBoardColors();
         ClampCamera();
@@ -98,6 +108,7 @@ public class CafeBoard : MonoBehaviour
         FollowGhost();
         SyncCups();
         ApplyDim(shop);
+        SyncStations();
     }
 
     void CacheBoardColors()
@@ -111,7 +122,7 @@ public class CafeBoard : MonoBehaviour
         int count = 0;
         for (int i = 0; i < all.Length; i++)
         {
-            if (!IsCupMark(all[i]))
+            if (!IsKeptSprite(all[i]))
                 count++;
         }
 
@@ -120,7 +131,7 @@ public class CafeBoard : MonoBehaviour
         int write = 0;
         for (int i = 0; i < all.Length; i++)
         {
-            if (IsCupMark(all[i]))
+            if (IsKeptSprite(all[i]))
                 continue;
             boardSprites[write] = all[i];
             boardColors[write] = all[i].color;
@@ -138,6 +149,11 @@ public class CafeBoard : MonoBehaviour
                 return true;
         }
         return false;
+    }
+
+    bool IsKeptSprite(SpriteRenderer renderer)
+    {
+        return IsCupMark(renderer) || renderer == waterMark || renderer == toastMark || renderer == plateMark;
     }
 
     void ApplyDim(bool shop)
@@ -171,7 +187,10 @@ public class CafeBoard : MonoBehaviour
         held = null;
         ghost = null;
         if (dragToken != null)
+        {
+            RestorePlaceholder();
             dragToken.gameObject.SetActive(false);
+        }
     }
 
     static Vector2 PointerScreen()
@@ -283,7 +302,7 @@ public class CafeBoard : MonoBehaviour
 
         dragging = true;
         held = spot;
-        dragToken.color = SpotColor(spot.Spot, session, spot.Index);
+        ShowHeldSprite(spot);
         dragToken.sortingOrder = 40;
         dragToken.gameObject.SetActive(true);
         ghost = dragToken.transform;
@@ -298,7 +317,10 @@ public class CafeBoard : MonoBehaviour
         dragging = false;
         CafeHotspot target = PointerOverUi() ? null : HotspotUnderCursor();
         if (dragToken != null)
+        {
+            RestorePlaceholder();
             dragToken.gameObject.SetActive(false);
+        }
         ghost = null;
         held = null;
 
@@ -474,85 +496,241 @@ public class CafeBoard : MonoBehaviour
             if (!show)
                 continue;
 
-            cupMarks[i].color = CupTint(session.Trays[i]);
+            ShowCup(cupMarks[i], session.Trays[i]);
         }
-
-        if (waterMark != null)
-        {
-            bool show = session.WaterCup.Occupied;
-            waterMark.enabled = show;
-            if (show)
-                waterMark.color = CupTint(session.WaterCup);
-        }
-
-        SyncPastryMark(plateMark, session.Plated);
-        SyncPastryMark(toastMark, session.ToasterReady);
     }
 
-    static void SyncPastryMark(SpriteRenderer mark, PastryType pastry)
+    void SyncStations()
+    {
+        if (session == null)
+            return;
+
+        EnsureStationMarks();
+        ShowStationCup(waterMark, waterSpot, session.WaterCup);
+        ShowStationPastry(toastMark, toastSpot, session.ToasterHeld);
+        ShowStationPastry(plateMark, plateSpot, session.Plated);
+    }
+
+    void ShowStationCup(SpriteRenderer mark, CafeHotspot spot, TrayCup cup)
     {
         if (mark == null)
             return;
+
+        bool show = cup != null && cup.Occupied;
+        mark.enabled = show;
+        if (!show)
+            return;
+
+        mark.sortingOrder = 25;
+        Sprite art = cup.Hot ? hotCupSprite : coldCupSprite;
+        if (art != null)
+            ShowArt(mark, art, spot.Spot == CafeSpot.WaterTray ? 0.62f : StationSize(spot, 0.85f));
+        else
+            mark.color = CupTint(cup);
+        AlignToHotspot(mark, spot);
+    }
+
+    void ShowStationPastry(SpriteRenderer mark, CafeHotspot spot, PastryType pastry)
+    {
+        if (mark == null)
+            return;
+
         bool show = pastry != PastryType.None;
         mark.enabled = show;
-        if (show)
-            mark.color = CroissantColor(pastry);
-    }
-
-    void EnsurePastryMarks()
-    {
-        if (cupMarks == null || cupMarks.Length == 0 || cupMarks[0] == null || hotspots == null)
+        if (!show)
             return;
 
-        for (int i = 0; i < hotspots.Length; i++)
+        mark.sortingOrder = 25;
+        Sprite art = CroissantSprite(pastry);
+        if (art != null)
+            ShowArt(mark, art, StationSize(spot, 0.95f));
+        else
+            mark.color = CroissantColor(pastry);
+        AlignToHotspot(mark, spot);
+    }
+
+    void AlignToHotspot(SpriteRenderer mark, CafeHotspot spot)
+    {
+        if (spot == null || mark.sprite == null)
+            return;
+
+        Collider2D collider = spot.GetComponent<Collider2D>();
+        Vector3 world = collider != null
+            ? spot.transform.TransformPoint(collider.offset)
+            : spot.transform.position;
+        if (spot.Spot == CafeSpot.WaterTray)
+            world += spot.transform.up * (spot.transform.lossyScale.y * -0.35f);
+        mark.transform.position += world - mark.bounds.center;
+    }
+
+    float StationSize(CafeHotspot spot, float fallback)
+    {
+        if (spot == null)
+            return fallback;
+
+        Collider2D collider = spot.GetComponent<Collider2D>();
+        if (collider == null)
+            return fallback;
+
+        float span = Mathf.Min(collider.bounds.size.x, collider.bounds.size.y);
+        if (span < 0.05f)
+            return fallback;
+        return Mathf.Clamp(span * 0.62f, 0.55f, 1.35f);
+    }
+
+    void ShowHeldSprite(CafeHotspot spot)
+    {
+        Sprite art = HeldArt(spot);
+        if (art == null)
         {
-            CafeHotspot hotspot = hotspots[i];
+            RestorePlaceholder();
+            dragToken.color = SpotColor(spot.Spot, session, spot.Index);
+            return;
+        }
+
+        bool pastry = spot.Spot == CafeSpot.CroissantPlain
+            || spot.Spot == CafeSpot.CroissantChocolate
+            || spot.Spot == CafeSpot.CroissantCheese
+            || spot.Spot == CafeSpot.Toaster;
+        ShowArt(dragToken, art, pastry ? 0.8f : 0.72f);
+    }
+
+    void ShowCup(SpriteRenderer renderer, TrayCup cup)
+    {
+        Sprite art = cup.Hot ? hotCupSprite : coldCupSprite;
+        if (art != null)
+            ShowArt(renderer, art, 0.72f);
+        else
+            renderer.color = CupTint(cup);
+    }
+
+    Sprite HeldArt(CafeHotspot spot)
+    {
+        if (spot.Spot == CafeSpot.CupHot)
+            return hotCupSprite;
+        if (spot.Spot == CafeSpot.CupCold)
+            return coldCupSprite;
+        if (spot.Spot == CafeSpot.CroissantPlain)
+            return plainCroissantSprite;
+        if (spot.Spot == CafeSpot.CroissantChocolate)
+            return chocolateCroissantSprite;
+        if (spot.Spot == CafeSpot.CroissantCheese)
+            return cheeseCroissantSprite;
+        if (spot.Spot == CafeSpot.Tray && spot.Index >= 0 && spot.Index < session.Trays.Length && session.Trays[spot.Index].Occupied)
+            return session.Trays[spot.Index].Hot ? hotCupSprite : coldCupSprite;
+        if (spot.Spot == CafeSpot.WaterTray && session.WaterCup.Occupied)
+            return session.WaterCup.Hot ? hotCupSprite : coldCupSprite;
+        if (spot.Spot == CafeSpot.Toaster)
+            return CroissantSprite(session.ToasterHeld);
+        return null;
+    }
+
+    Sprite CroissantSprite(PastryType pastry)
+    {
+        if (pastry == PastryType.Plain)
+            return plainCroissantSprite;
+        if (pastry == PastryType.Chocolate)
+            return chocolateCroissantSprite;
+        if (pastry == PastryType.Cheese)
+            return cheeseCroissantSprite;
+        return null;
+    }
+
+    void ShowArt(SpriteRenderer renderer, Sprite sprite, float worldSize)
+    {
+        renderer.sprite = sprite;
+        renderer.color = Color.white;
+        FitSprite(renderer, worldSize);
+    }
+
+    void FitSprite(SpriteRenderer renderer, float worldSize)
+    {
+        if (renderer.sprite == null)
+            return;
+
+        Vector2 size = renderer.sprite.bounds.size;
+        float largest = Mathf.Max(size.x, size.y);
+        if (largest < 0.001f)
+            return;
+
+        float parent = 1f;
+        if (renderer.transform.parent != null)
+            parent = Mathf.Max(Mathf.Abs(renderer.transform.parent.lossyScale.x), Mathf.Abs(renderer.transform.parent.lossyScale.y));
+        if (parent < 0.001f)
+            parent = 1f;
+
+        float scale = worldSize / (largest * parent);
+        renderer.transform.localScale = new Vector3(scale, scale, 1f);
+    }
+
+    void RestorePlaceholder()
+    {
+        if (dragToken == null)
+            return;
+        if (placeholderSprite != null)
+            dragToken.sprite = placeholderSprite;
+        if (placeholderScale != Vector3.zero)
+            dragToken.transform.localScale = placeholderScale;
+    }
+
+    CafeHotspot waterSpot;
+    CafeHotspot toastSpot;
+    CafeHotspot plateSpot;
+
+    void EnsureStationMarks()
+    {
+        if (hotspots == null)
+            return;
+
+        RememberStation(hotspots);
+        if (waterSpot == null || toastSpot == null || plateSpot == null)
+            RememberStation(FindObjectsByType<CafeHotspot>(FindObjectsInactive.Include, FindObjectsSortMode.None));
+
+        if (waterSpot != null && waterMark == null)
+            waterMark = MakeStationMark(waterSpot.transform, "WaterCupMark");
+        if (toastSpot != null && toastMark == null)
+            toastMark = MakeStationMark(toastSpot.transform, "ToastMark");
+        if (plateSpot != null && plateMark == null)
+            plateMark = MakeStationMark(plateSpot.transform, "PlateMark");
+    }
+
+    void RememberStation(CafeHotspot[] spots)
+    {
+        if (spots == null)
+            return;
+
+        for (int i = 0; i < spots.Length; i++)
+        {
+            CafeHotspot hotspot = spots[i];
             if (hotspot == null)
                 continue;
-            if (hotspot.Spot == CafeSpot.Plate && plateMark == null)
-                plateMark = MakePastryMark(hotspot.transform, "PlateMark");
-            if (hotspot.Spot == CafeSpot.Toaster && toastMark == null)
-                toastMark = MakePastryMark(hotspot.transform, "ToastMark");
+            if (hotspot.Spot == CafeSpot.WaterTray)
+                waterSpot = hotspot;
+            else if (hotspot.Spot == CafeSpot.Toaster)
+                toastSpot = hotspot;
+            else if (hotspot.Spot == CafeSpot.Plate)
+                plateSpot = hotspot;
         }
     }
 
-    SpriteRenderer MakePastryMark(Transform parent, string name)
+    SpriteRenderer MakeStationMark(Transform parent, string name)
     {
+        Transform existing = parent.Find(name);
+        if (existing != null)
+        {
+            SpriteRenderer found = existing.GetComponent<SpriteRenderer>();
+            if (found != null)
+                return found;
+        }
+
         GameObject mark = new GameObject(name);
         mark.transform.SetParent(parent, false);
-        mark.transform.localScale = cupMarks[0].transform.localScale * 0.65f;
         SpriteRenderer renderer = mark.AddComponent<SpriteRenderer>();
-        renderer.sprite = cupMarks[0].sprite;
-        renderer.sortingOrder = 6;
+        renderer.sortingOrder = 25;
         renderer.enabled = false;
+        if (cupMarks != null && cupMarks.Length > 0 && cupMarks[0] != null)
+            renderer.sharedMaterial = cupMarks[0].sharedMaterial;
         return renderer;
-    }
-
-    void EnsureWaterMark()
-    {
-        if (waterMark != null || cupMarks == null || cupMarks.Length == 0 || cupMarks[0] == null)
-            return;
-
-        CafeHotspot tray = null;
-        if (hotspots != null)
-        {
-            for (int i = 0; i < hotspots.Length; i++)
-            {
-                if (hotspots[i] != null && hotspots[i].Spot == CafeSpot.WaterTray)
-                    tray = hotspots[i];
-            }
-        }
-        if (tray == null)
-            return;
-
-        GameObject mark = new GameObject("WaterCupMark");
-        mark.transform.SetParent(tray.transform, false);
-        mark.transform.localPosition = new Vector3(0f, -1.8f, 0f);
-        mark.transform.localScale = cupMarks[0].transform.localScale;
-        waterMark = mark.AddComponent<SpriteRenderer>();
-        waterMark.sprite = cupMarks[0].sprite;
-        waterMark.sortingOrder = 6;
-        waterMark.enabled = false;
     }
 
     void ResolveBell()

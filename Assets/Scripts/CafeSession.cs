@@ -111,6 +111,7 @@ public class CafeSession
     public float ToasterTimer;
     public PastryType ToasterReady;
     public PastryType Plated;
+    public PastryType ToasterHeld => ToasterBusy ? toasting : ToasterReady;
     public bool CoffeeBusy;
     public float CoffeeTimer;
     public int CoffeeUses;
