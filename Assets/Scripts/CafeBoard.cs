@@ -22,6 +22,8 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] Sprite milkSprite;
     [SerializeField] Sprite iceSprite;
     [SerializeField] Sprite puckSprite;
+    [SerializeField] Sprite beansSprite;
+    [SerializeField] Sprite coffeeSprite;
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
@@ -44,6 +46,7 @@ public class CafeBoard : MonoBehaviour
     SpriteRenderer toastMark;
     SpriteRenderer puckMark;
     SpriteRenderer espressoPuckMark;
+    SpriteRenderer coffeeMark;
     Sprite placeholderSprite;
     Vector3 placeholderScale;
 
@@ -59,11 +62,73 @@ public class CafeBoard : MonoBehaviour
             dragToken.gameObject.SetActive(false);
         }
         WireHotspots();
+        CacheCircleTimers();
         EnsureStationMarks();
         ResolveBell();
         CacheBoardColors();
         ClampCamera();
         built = true;
+    }
+
+    Image grinderFill;
+    Image espressoFill;
+    Image coffeeFill;
+
+    void CacheCircleTimers()
+    {
+        CafeHotspot[] spots = FindObjectsByType<CafeHotspot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < spots.Length; i++)
+        {
+            CafeHotspot hotspot = spots[i];
+            if (hotspot == null)
+                continue;
+
+            Image fill = CircleFill(hotspot.transform);
+            if (fill == null)
+                continue;
+            if (hotspot.Spot == CafeSpot.Grinder)
+                grinderFill = fill;
+            else if (hotspot.Spot == CafeSpot.Espresso)
+                espressoFill = fill;
+            else if (hotspot.Spot == CafeSpot.Coffee)
+                coffeeFill = fill;
+        }
+    }
+
+    static Image CircleFill(Transform root)
+    {
+        Transform[] all = root.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i].name != "CircleTimer")
+                continue;
+
+            Image image = all[i].GetComponentInChildren<Image>(true);
+            if (image != null)
+                image.raycastTarget = false;
+            return image;
+        }
+
+        return null;
+    }
+
+    void SyncCircleTimers()
+    {
+        if (session == null)
+            return;
+
+        SetFill(grinderFill, session.GrinderBusy, session.GrinderTimer, CafeBalance.GrindSeconds);
+        SetFill(espressoFill, session.EspressoBusy, session.EspressoTimer, CafeBalance.EspressoSeconds);
+        SetFill(coffeeFill, session.CoffeeBusy, session.CoffeeTimer, CafeBalance.CoffeeSeconds);
+    }
+
+    static void SetFill(Image image, bool busy, float remaining, float duration)
+    {
+        if (image == null)
+            return;
+
+        float progress = duration > 0f ? 1f - remaining / duration : 1f;
+        image.fillAmount = busy ? Mathf.Clamp01(progress) : 0f;
     }
 
     void WireHotspots()
@@ -118,6 +183,7 @@ public class CafeBoard : MonoBehaviour
         SyncCups();
         ApplyDim(shop);
         SyncStations();
+        SyncCircleTimers();
     }
 
     void CacheBoardColors()
@@ -521,6 +587,7 @@ public class CafeBoard : MonoBehaviour
         bool holdingPuck = dragging && held != null && held.Spot == CafeSpot.CoffeePuck;
         ShowStationSprite(puckMark, puckSpot, puckSprite, session.PuckReady && !holdingPuck);
         ShowStationSprite(espressoPuckMark, espressoSpot, puckSprite, session.EspressoBusy || session.EspressoShots > 0);
+        ShowStationSprite(coffeeMark, coffeeSpot, coffeeSprite, session.CoffeeUses > 0 && !session.CoffeeBusy);
     }
 
     void ShowStationCup(SpriteRenderer mark, CafeHotspot spot, TrayCup cup)
@@ -539,7 +606,6 @@ public class CafeBoard : MonoBehaviour
             ShowArt(mark, art, spot.Spot == CafeSpot.WaterTray ? 0.62f : StationSize(spot, 0.85f));
         else
             mark.color = CupTint(cup);
-        AlignToHotspot(mark, spot);
     }
 
     void ShowStationPastry(SpriteRenderer mark, CafeHotspot spot, PastryType pastry)
@@ -558,7 +624,6 @@ public class CafeBoard : MonoBehaviour
             ShowArt(mark, art, StationSize(spot, 0.95f));
         else
             mark.color = CroissantColor(pastry);
-        AlignToHotspot(mark, spot);
     }
 
     void ShowStationSprite(SpriteRenderer mark, CafeHotspot spot, Sprite art, bool show)
@@ -572,21 +637,6 @@ public class CafeBoard : MonoBehaviour
 
         mark.sortingOrder = 25;
         ShowArt(mark, art, StationSize(spot, 0.7f));
-        AlignToHotspot(mark, spot);
-    }
-
-    void AlignToHotspot(SpriteRenderer mark, CafeHotspot spot)
-    {
-        if (spot == null || mark.sprite == null)
-            return;
-
-        Collider2D collider = spot.GetComponent<Collider2D>();
-        Vector3 world = collider != null
-            ? spot.transform.TransformPoint(collider.offset)
-            : spot.transform.position;
-        if (spot.Spot == CafeSpot.WaterTray)
-            world += spot.transform.up * (spot.transform.lossyScale.y * -0.35f);
-        mark.transform.position += world - mark.bounds.center;
     }
 
     float StationSize(CafeHotspot spot, float fallback)
@@ -656,6 +706,10 @@ public class CafeBoard : MonoBehaviour
             return iceSprite;
         if (spot.Spot == CafeSpot.CoffeePuck)
             return puckSprite;
+        if (spot.Spot == CafeSpot.Coffee && session.CoffeeUses > 0)
+            return coffeeSprite;
+        if (spot.Spot == CafeSpot.Beans)
+            return beansSprite;
         if (spot.Spot == CafeSpot.Espresso && session.EspressoShots > 0)
             return puckSprite;
         if (spot.Spot == CafeSpot.Tray && spot.Index >= 0 && spot.Index < session.Trays.Length && session.Trays[spot.Index].Occupied)
@@ -699,6 +753,7 @@ public class CafeBoard : MonoBehaviour
     CafeHotspot plateSpot;
     CafeHotspot puckSpot;
     CafeHotspot espressoSpot;
+    CafeHotspot coffeeSpot;
 
     void EnsureStationMarks()
     {
@@ -706,7 +761,7 @@ public class CafeBoard : MonoBehaviour
             return;
 
         RememberStation(hotspots);
-        if (waterSpot == null || toastSpot == null || plateSpot == null || puckSpot == null || espressoSpot == null)
+        if (waterSpot == null || toastSpot == null || plateSpot == null || puckSpot == null || espressoSpot == null || coffeeSpot == null)
             RememberStation(FindObjectsByType<CafeHotspot>(FindObjectsInactive.Include, FindObjectsSortMode.None));
 
         if (waterSpot != null && waterMark == null)
@@ -719,6 +774,8 @@ public class CafeBoard : MonoBehaviour
             puckMark = MakeStationMark(puckSpot.transform, "PuckMark");
         if (espressoSpot != null && espressoPuckMark == null)
             espressoPuckMark = MakeStationMark(espressoSpot.transform, "EspressoPuckMark");
+        if (coffeeSpot != null && coffeeMark == null)
+            coffeeMark = MakeStationMark(coffeeSpot.transform, "CoffeeMark");
     }
 
     void RememberStation(CafeHotspot[] spots)
@@ -741,6 +798,8 @@ public class CafeBoard : MonoBehaviour
                 puckSpot = hotspot;
             else if (hotspot.Spot == CafeSpot.Espresso)
                 espressoSpot = hotspot;
+            else if (hotspot.Spot == CafeSpot.Coffee)
+                coffeeSpot = hotspot;
         }
     }
 

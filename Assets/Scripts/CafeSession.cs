@@ -1050,13 +1050,13 @@ public class CafeSession
     string MachineLine()
     {
         string grind = GrinderBusy
-            ? "Grind " + SecondsLeft(GrinderTimer)
+            ? "Grinding"
             : (PuckReady ? "Puck ready" : "Grind idle");
         string shot = EspressoBusy
-            ? "Shot " + SecondsLeft(EspressoTimer)
+            ? "Pulling"
             : "Shots " + EspressoShots;
         string coffee = CoffeeBusy
-            ? "Pot " + SecondsLeft(CoffeeTimer)
+            ? "Brewing"
             : "Pot x" + CoffeeUses;
         string line = grind + "   " + shot + "   " + coffee;
         if (ToasterBusy)
