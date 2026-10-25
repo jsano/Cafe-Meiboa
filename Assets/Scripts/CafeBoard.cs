@@ -15,6 +15,13 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] Sprite plainCroissantSprite;
     [SerializeField] Sprite chocolateCroissantSprite;
     [SerializeField] Sprite cheeseCroissantSprite;
+    [SerializeField] Sprite vanillaSyrupSprite;
+    [SerializeField] Sprite chocolateSyrupSprite;
+    [SerializeField] Sprite honeySyrupSprite;
+    [SerializeField] Sprite strawberrySyrupSprite;
+    [SerializeField] Sprite milkSprite;
+    [SerializeField] Sprite iceSprite;
+    [SerializeField] Sprite puckSprite;
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
@@ -35,6 +42,8 @@ public class CafeBoard : MonoBehaviour
     SpriteRenderer waterMark;
     SpriteRenderer plateMark;
     SpriteRenderer toastMark;
+    SpriteRenderer puckMark;
+    SpriteRenderer espressoPuckMark;
     Sprite placeholderSprite;
     Vector3 placeholderScale;
 
@@ -509,6 +518,9 @@ public class CafeBoard : MonoBehaviour
         ShowStationCup(waterMark, waterSpot, session.WaterCup);
         ShowStationPastry(toastMark, toastSpot, session.ToasterHeld);
         ShowStationPastry(plateMark, plateSpot, session.Plated);
+        bool holdingPuck = dragging && held != null && held.Spot == CafeSpot.CoffeePuck;
+        ShowStationSprite(puckMark, puckSpot, puckSprite, session.PuckReady && !holdingPuck);
+        ShowStationSprite(espressoPuckMark, espressoSpot, puckSprite, session.EspressoBusy || session.EspressoShots > 0);
     }
 
     void ShowStationCup(SpriteRenderer mark, CafeHotspot spot, TrayCup cup)
@@ -546,6 +558,20 @@ public class CafeBoard : MonoBehaviour
             ShowArt(mark, art, StationSize(spot, 0.95f));
         else
             mark.color = CroissantColor(pastry);
+        AlignToHotspot(mark, spot);
+    }
+
+    void ShowStationSprite(SpriteRenderer mark, CafeHotspot spot, Sprite art, bool show)
+    {
+        if (mark == null)
+            return;
+
+        mark.enabled = show && art != null;
+        if (!mark.enabled)
+            return;
+
+        mark.sortingOrder = 25;
+        ShowArt(mark, art, StationSize(spot, 0.7f));
         AlignToHotspot(mark, spot);
     }
 
@@ -616,6 +642,22 @@ public class CafeBoard : MonoBehaviour
             return chocolateCroissantSprite;
         if (spot.Spot == CafeSpot.CroissantCheese)
             return cheeseCroissantSprite;
+        if (spot.Spot == CafeSpot.SyrupVanilla)
+            return vanillaSyrupSprite;
+        if (spot.Spot == CafeSpot.SyrupChocolate)
+            return chocolateSyrupSprite;
+        if (spot.Spot == CafeSpot.SyrupHoney)
+            return honeySyrupSprite;
+        if (spot.Spot == CafeSpot.SyrupStrawberry)
+            return strawberrySyrupSprite;
+        if (spot.Spot == CafeSpot.Milk)
+            return milkSprite;
+        if (spot.Spot == CafeSpot.Ice)
+            return iceSprite;
+        if (spot.Spot == CafeSpot.CoffeePuck)
+            return puckSprite;
+        if (spot.Spot == CafeSpot.Espresso && session.EspressoShots > 0)
+            return puckSprite;
         if (spot.Spot == CafeSpot.Tray && spot.Index >= 0 && spot.Index < session.Trays.Length && session.Trays[spot.Index].Occupied)
             return session.Trays[spot.Index].Hot ? hotCupSprite : coldCupSprite;
         if (spot.Spot == CafeSpot.WaterTray && session.WaterCup.Occupied)
@@ -640,27 +682,6 @@ public class CafeBoard : MonoBehaviour
     {
         renderer.sprite = sprite;
         renderer.color = Color.white;
-        FitSprite(renderer, worldSize);
-    }
-
-    void FitSprite(SpriteRenderer renderer, float worldSize)
-    {
-        if (renderer.sprite == null)
-            return;
-
-        Vector2 size = renderer.sprite.bounds.size;
-        float largest = Mathf.Max(size.x, size.y);
-        if (largest < 0.001f)
-            return;
-
-        float parent = 1f;
-        if (renderer.transform.parent != null)
-            parent = Mathf.Max(Mathf.Abs(renderer.transform.parent.lossyScale.x), Mathf.Abs(renderer.transform.parent.lossyScale.y));
-        if (parent < 0.001f)
-            parent = 1f;
-
-        float scale = worldSize / (largest * parent);
-        renderer.transform.localScale = new Vector3(scale, scale, 1f);
     }
 
     void RestorePlaceholder()
@@ -676,6 +697,8 @@ public class CafeBoard : MonoBehaviour
     CafeHotspot waterSpot;
     CafeHotspot toastSpot;
     CafeHotspot plateSpot;
+    CafeHotspot puckSpot;
+    CafeHotspot espressoSpot;
 
     void EnsureStationMarks()
     {
@@ -683,7 +706,7 @@ public class CafeBoard : MonoBehaviour
             return;
 
         RememberStation(hotspots);
-        if (waterSpot == null || toastSpot == null || plateSpot == null)
+        if (waterSpot == null || toastSpot == null || plateSpot == null || puckSpot == null || espressoSpot == null)
             RememberStation(FindObjectsByType<CafeHotspot>(FindObjectsInactive.Include, FindObjectsSortMode.None));
 
         if (waterSpot != null && waterMark == null)
@@ -692,6 +715,10 @@ public class CafeBoard : MonoBehaviour
             toastMark = MakeStationMark(toastSpot.transform, "ToastMark");
         if (plateSpot != null && plateMark == null)
             plateMark = MakeStationMark(plateSpot.transform, "PlateMark");
+        if (puckSpot != null && puckMark == null)
+            puckMark = MakeStationMark(puckSpot.transform, "PuckMark");
+        if (espressoSpot != null && espressoPuckMark == null)
+            espressoPuckMark = MakeStationMark(espressoSpot.transform, "EspressoPuckMark");
     }
 
     void RememberStation(CafeHotspot[] spots)
@@ -710,6 +737,10 @@ public class CafeBoard : MonoBehaviour
                 toastSpot = hotspot;
             else if (hotspot.Spot == CafeSpot.Plate)
                 plateSpot = hotspot;
+            else if (hotspot.Spot == CafeSpot.CoffeePuck)
+                puckSpot = hotspot;
+            else if (hotspot.Spot == CafeSpot.Espresso)
+                espressoSpot = hotspot;
         }
     }
 
