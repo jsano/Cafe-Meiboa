@@ -938,7 +938,7 @@ public class CafeSession
 
         if (cat.DrinkReady && Focus == index)
         {
-            Serve(index);
+            Status = "Drag the cup to the cat.";
             return;
         }
 
@@ -1041,7 +1041,7 @@ public class CafeSession
     {
         string machines = MachineLine();
         if (FocusReady)
-            return "Ready to serve.  " + machines;
+            return "Drag the cup to the cat.  " + machines;
         if (BrewTiming)
             return "Stop in the green.  " + machines;
         return machines;
@@ -1060,19 +1060,13 @@ public class CafeSession
             : "Pot x" + CoffeeUses;
         string line = grind + "   " + shot + "   " + coffee;
         if (ToasterBusy)
-            line += "   Toast " + SecondsLeft(ToasterTimer);
+            line += "   Toasting";
         else if (ToasterReady != PastryType.None)
             line += "   Toast ready";
         if (Plated != PastryType.None)
             line += "   Plate full";
         line += "   Steamed " + SteamedServings;
         return line;
-    }
-
-    static string SecondsLeft(float seconds)
-    {
-        int left = Mathf.CeilToInt(Mathf.Max(0f, seconds));
-        return left + "s";
     }
 
     public string OrderBubble(Customer cat)
@@ -1445,7 +1439,7 @@ public class CafeSession
         {
             cat.DrinkReady = true;
             FocusReady = true;
-            Status = prepNote + "Drink is ready. Click the cat.";
+            Status = prepNote + "Drink is ready. Drag the cup to the cat.";
             return;
         }
 
@@ -1520,7 +1514,7 @@ public class CafeSession
             cat.DrinkReady = true;
             FocusReady = true;
             BrewTiming = false;
-            Status = "Ready. Click the cat to serve.";
+            Status = "Ready. Drag the cup to the cat.";
         }
         else if (!BrewTiming)
         {
@@ -1946,8 +1940,35 @@ public class CafeSession
         FocusReady = true;
         BrewLocked = true;
         BrewTiming = false;
-        Status = "Ready. Click the cat to serve.";
+        Status = "Ready. Drag the cup to the cat.";
         return true;
+    }
+
+    public void OfferCup(int index, int tray)
+    {
+        if (Phase != DayPhase.Shift || index < 0 || index >= Slots.Length)
+            return;
+        if (tray < 0 || tray >= Trays.Length || !Trays[tray].Occupied)
+            return;
+
+        Customer cat = Slots[index];
+        if (!cat.Occupied || cat.IsThief)
+        {
+            Status = "They don't want a drink.";
+            return;
+        }
+        if (!cat.Accepted)
+        {
+            Status = "Take the order before you hand it over.";
+            return;
+        }
+        if (!cat.DrinkReady || Focus != index || tray != ActiveTray)
+        {
+            Status = "They don't want that.";
+            return;
+        }
+
+        Serve(index);
     }
 
     string MissingHint()
@@ -1976,7 +1997,7 @@ public class CafeSession
         if (cat.Drink == DrinkType.Latte && Prep != PrepType.SteamedMilk && SteamedServings <= 0)
             return "Steam some milk.";
         if (cat.Drink == DrinkType.SyrupCoffee && !AnySyrup())
-            return "Add a syrup to the cup.";
+            return "Add a syrup or tea to the cup.";
         return "";
     }
 
@@ -1989,7 +2010,21 @@ public class CafeSession
         if (syrup == 3)
             return "Strawberry";
         if (syrup == 4)
-            return "Honey";
+            return "Caramel";
+        if (syrup == 5)
+            return "White chocolate";
+        if (syrup == 6)
+            return "Coconut";
+        if (syrup == 7)
+            return "Almond";
+        if (syrup == 8)
+            return "Black tea";
+        if (syrup == 9)
+            return "Green tea";
+        if (syrup == 10)
+            return "Matcha";
+        if (syrup == 11)
+            return "White tea";
         return "Syrup";
     }
 

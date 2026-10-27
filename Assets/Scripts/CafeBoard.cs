@@ -17,13 +17,21 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] Sprite cheeseCroissantSprite;
     [SerializeField] Sprite vanillaSyrupSprite;
     [SerializeField] Sprite chocolateSyrupSprite;
-    [SerializeField] Sprite honeySyrupSprite;
+    [SerializeField] Sprite caramelSyrupSprite;
     [SerializeField] Sprite strawberrySyrupSprite;
+    [SerializeField] Sprite whiteChocolateSyrupSprite;
+    [SerializeField] Sprite coconutSyrupSprite;
+    [SerializeField] Sprite almondSyrupSprite;
+    [SerializeField] Sprite blackTeaSprite;
+    [SerializeField] Sprite greenTeaSprite;
+    [SerializeField] Sprite matchaTeaSprite;
+    [SerializeField] Sprite whiteTeaSprite;
     [SerializeField] Sprite milkSprite;
     [SerializeField] Sprite iceSprite;
     [SerializeField] Sprite puckSprite;
     [SerializeField] Sprite beansSprite;
     [SerializeField] Sprite coffeeSprite;
+    [SerializeField] Sprite strawSprite;
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
@@ -31,6 +39,7 @@ public class CafeBoard : MonoBehaviour
     const float ShopDim = 0.4f;
 
     CafeSession session;
+    CafeHud hud;
     bool built;
     bool dragging;
     bool panning;
@@ -50,9 +59,11 @@ public class CafeBoard : MonoBehaviour
     Sprite placeholderSprite;
     Vector3 placeholderScale;
 
-    public void Attach(CafeSession cafeSession)
+    public void Attach(CafeSession cafeSession, CafeHud cafeHud = null)
     {
         session = cafeSession;
+        if (cafeHud != null)
+            hud = cafeHud;
         if (cam == null)
             cam = Camera.main;
         if (dragToken != null)
@@ -73,6 +84,7 @@ public class CafeBoard : MonoBehaviour
     Image grinderFill;
     Image espressoFill;
     Image coffeeFill;
+    Image toasterFill;
 
     void CacheCircleTimers()
     {
@@ -92,6 +104,8 @@ public class CafeBoard : MonoBehaviour
                 espressoFill = fill;
             else if (hotspot.Spot == CafeSpot.Coffee)
                 coffeeFill = fill;
+            else if (hotspot.Spot == CafeSpot.Toaster)
+                toasterFill = fill;
         }
     }
 
@@ -120,6 +134,7 @@ public class CafeBoard : MonoBehaviour
         SetFill(grinderFill, session.GrinderBusy, session.GrinderTimer, CafeBalance.GrindSeconds);
         SetFill(espressoFill, session.EspressoBusy, session.EspressoTimer, CafeBalance.EspressoSeconds);
         SetFill(coffeeFill, session.CoffeeBusy, session.CoffeeTimer, CafeBalance.CoffeeSeconds);
+        SetFill(toasterFill, session.ToasterBusy, session.ToasterTimer, CafeBalance.ToastSeconds);
     }
 
     static void SetFill(Image image, bool busy, float remaining, float duration)
@@ -390,6 +405,7 @@ public class CafeBoard : MonoBehaviour
             return;
 
         dragging = false;
+        int customer = hud != null ? hud.SlotUnderPointer() : -1;
         CafeHotspot target = PointerOverUi() ? null : HotspotUnderCursor();
         if (dragToken != null)
         {
@@ -398,6 +414,12 @@ public class CafeBoard : MonoBehaviour
         }
         ghost = null;
         held = null;
+
+        if (customer >= 0 && spot.Spot == CafeSpot.Tray)
+        {
+            session.OfferCup(customer, spot.Index);
+            return;
+        }
 
         if (target == null || target == spot)
             return;
@@ -442,6 +464,8 @@ public class CafeBoard : MonoBehaviour
             session.SteamMilk();
         else if (IsSyrup(source.Spot) && target.Spot == CafeSpot.Tray)
             session.AddSyrup(target.Index, SyrupId(source.Spot));
+        else if (IsTea(source.Spot) && target.Spot == CafeSpot.Tray)
+            session.AddSyrup(target.Index, TeaId(source.Spot));
         else if (source.Spot == CafeSpot.Tray && target.Spot == CafeSpot.Trash)
             session.TrashCup(source.Index);
         else if (source.Spot == CafeSpot.Tray && target.Spot == CafeSpot.Tray)
@@ -566,7 +590,7 @@ public class CafeBoard : MonoBehaviour
         {
             if (cupMarks[i] == null)
                 continue;
-            bool show = i < session.Trays.Length && session.Trays[i].Occupied;
+            bool show = i < session.Trays.Length && session.Trays[i].Occupied && !Holding(CafeSpot.Tray, i);
             cupMarks[i].enabled = show;
             if (!show)
                 continue;
@@ -581,13 +605,27 @@ public class CafeBoard : MonoBehaviour
             return;
 
         EnsureStationMarks();
-        ShowStationCup(waterMark, waterSpot, session.WaterCup);
-        ShowStationPastry(toastMark, toastSpot, session.ToasterHeld);
+        if (Holding(CafeSpot.WaterTray))
+        {
+            if (waterMark != null)
+                waterMark.enabled = false;
+        }
+        else
+            ShowStationCup(waterMark, waterSpot, session.WaterCup);
+        PastryType toasting = Holding(CafeSpot.Toaster) ? PastryType.None : session.ToasterHeld;
+        ShowStationPastry(toastMark, toastSpot, toasting);
         ShowStationPastry(plateMark, plateSpot, session.Plated);
         bool holdingPuck = dragging && held != null && held.Spot == CafeSpot.CoffeePuck;
         ShowStationSprite(puckMark, puckSpot, puckSprite, session.PuckReady && !holdingPuck);
-        ShowStationSprite(espressoPuckMark, espressoSpot, puckSprite, session.EspressoBusy || session.EspressoShots > 0);
+        ShowStationSprite(espressoPuckMark, espressoSpot, puckSprite, (session.EspressoBusy || session.EspressoShots > 0) && !Holding(CafeSpot.Espresso));
         ShowStationSprite(coffeeMark, coffeeSpot, coffeeSprite, session.CoffeeUses > 0 && !session.CoffeeBusy);
+    }
+
+    bool Holding(CafeSpot spot, int index = -1)
+    {
+        if (!dragging || held == null || held.Spot != spot)
+            return false;
+        return spot != CafeSpot.Tray || held.Index == index;
     }
 
     void ShowStationCup(SpriteRenderer mark, CafeHotspot spot, TrayCup cup)
@@ -604,8 +642,6 @@ public class CafeBoard : MonoBehaviour
         Sprite art = cup.Hot ? hotCupSprite : coldCupSprite;
         if (art != null)
             ShowArt(mark, art, spot.Spot == CafeSpot.WaterTray ? 0.62f : StationSize(spot, 0.85f));
-        else
-            mark.color = CupTint(cup);
     }
 
     void ShowStationPastry(SpriteRenderer mark, CafeHotspot spot, PastryType pastry)
@@ -622,8 +658,6 @@ public class CafeBoard : MonoBehaviour
         Sprite art = CroissantSprite(pastry);
         if (art != null)
             ShowArt(mark, art, StationSize(spot, 0.95f));
-        else
-            mark.color = CroissantColor(pastry);
     }
 
     void ShowStationSprite(SpriteRenderer mark, CafeHotspot spot, Sprite art, bool show)
@@ -660,7 +694,6 @@ public class CafeBoard : MonoBehaviour
         if (art == null)
         {
             RestorePlaceholder();
-            dragToken.color = SpotColor(spot.Spot, session, spot.Index);
             return;
         }
 
@@ -676,8 +709,6 @@ public class CafeBoard : MonoBehaviour
         Sprite art = cup.Hot ? hotCupSprite : coldCupSprite;
         if (art != null)
             ShowArt(renderer, art, 0.72f);
-        else
-            renderer.color = CupTint(cup);
     }
 
     Sprite HeldArt(CafeHotspot spot)
@@ -696,10 +727,24 @@ public class CafeBoard : MonoBehaviour
             return vanillaSyrupSprite;
         if (spot.Spot == CafeSpot.SyrupChocolate)
             return chocolateSyrupSprite;
-        if (spot.Spot == CafeSpot.SyrupHoney)
-            return honeySyrupSprite;
+        if (spot.Spot == CafeSpot.SyrupCaramel)
+            return caramelSyrupSprite;
         if (spot.Spot == CafeSpot.SyrupStrawberry)
             return strawberrySyrupSprite;
+        if (spot.Spot == CafeSpot.SyrupWhiteChocolate)
+            return whiteChocolateSyrupSprite;
+        if (spot.Spot == CafeSpot.SyrupCoconut)
+            return coconutSyrupSprite;
+        if (spot.Spot == CafeSpot.SyrupAlmond)
+            return almondSyrupSprite;
+        if (spot.Spot == CafeSpot.TeaBlack)
+            return blackTeaSprite;
+        if (spot.Spot == CafeSpot.TeaGreen)
+            return greenTeaSprite;
+        if (spot.Spot == CafeSpot.TeaMatcha)
+            return matchaTeaSprite;
+        if (spot.Spot == CafeSpot.TeaWhite)
+            return whiteTeaSprite;
         if (spot.Spot == CafeSpot.Milk)
             return milkSprite;
         if (spot.Spot == CafeSpot.Ice)
@@ -712,6 +757,8 @@ public class CafeBoard : MonoBehaviour
             return beansSprite;
         if (spot.Spot == CafeSpot.Espresso && session.EspressoShots > 0)
             return puckSprite;
+        if (spot.Spot == CafeSpot.Straw)
+            return strawSprite;
         if (spot.Spot == CafeSpot.Tray && spot.Index >= 0 && spot.Index < session.Trays.Length && session.Trays[spot.Index].Occupied)
             return session.Trays[spot.Index].Hot ? hotCupSprite : coldCupSprite;
         if (spot.Spot == CafeSpot.WaterTray && session.WaterCup.Occupied)
@@ -881,7 +928,10 @@ public class CafeBoard : MonoBehaviour
         return spot == CafeSpot.SyrupChocolate
             || spot == CafeSpot.SyrupVanilla
             || spot == CafeSpot.SyrupStrawberry
-            || spot == CafeSpot.SyrupHoney;
+            || spot == CafeSpot.SyrupCaramel
+            || spot == CafeSpot.SyrupWhiteChocolate
+            || spot == CafeSpot.SyrupCoconut
+            || spot == CafeSpot.SyrupAlmond;
     }
 
     static int SyrupId(CafeSpot spot)
@@ -892,91 +942,36 @@ public class CafeBoard : MonoBehaviour
             return 2;
         if (spot == CafeSpot.SyrupStrawberry)
             return 3;
-        if (spot == CafeSpot.SyrupHoney)
+        if (spot == CafeSpot.SyrupCaramel)
             return 4;
+        if (spot == CafeSpot.SyrupWhiteChocolate)
+            return 5;
+        if (spot == CafeSpot.SyrupCoconut)
+            return 6;
+        if (spot == CafeSpot.SyrupAlmond)
+            return 7;
         return 0;
     }
 
-    static Color SyrupColor(int syrup)
+    static bool IsTea(CafeSpot spot)
     {
-        if (syrup == 1)
-            return new Color(0.40f, 0.22f, 0.14f);
-        if (syrup == 2)
-            return new Color(0.95f, 0.90f, 0.55f);
-        if (syrup == 3)
-            return new Color(0.90f, 0.35f, 0.45f);
-        if (syrup == 4)
-            return new Color(0.90f, 0.70f, 0.20f);
-        return Color.white;
+        return spot == CafeSpot.TeaBlack
+            || spot == CafeSpot.TeaGreen
+            || spot == CafeSpot.TeaMatcha
+            || spot == CafeSpot.TeaWhite;
     }
 
-    static Color SpotColor(CafeSpot spot, CafeSession session, int index)
+    static int TeaId(CafeSpot spot)
     {
-        if (spot == CafeSpot.Beans)
-            return new Color(0.36f, 0.22f, 0.12f);
-        if (spot == CafeSpot.Coffee)
-            return new Color(0.28f, 0.14f, 0.08f);
-        if (spot == CafeSpot.CoffeePuck)
-            return new Color(0.22f, 0.12f, 0.08f);
-        if (spot == CafeSpot.Espresso)
-            return new Color(0.32f, 0.16f, 0.08f);
-        if (spot == CafeSpot.CupHot)
-            return new Color(0.92f, 0.32f, 0.28f);
-        if (spot == CafeSpot.CupCold)
-            return new Color(0.45f, 0.75f, 0.95f);
-        if (spot == CafeSpot.Straw)
-            return new Color(0.55f, 0.75f, 0.30f);
-        if (spot == CafeSpot.Ice)
-            return new Color(0.75f, 0.92f, 1f);
-        if (spot == CafeSpot.WaterHot)
-            return new Color(0.95f, 0.55f, 0.30f);
-        if (spot == CafeSpot.WaterCold)
-            return new Color(0.40f, 0.70f, 0.95f);
-        if (spot == CafeSpot.Milk)
-            return new Color(0.96f, 0.96f, 0.92f);
-        if (spot == CafeSpot.CroissantPlain)
-            return new Color(0.93f, 0.78f, 0.45f);
-        if (spot == CafeSpot.CroissantChocolate)
-            return new Color(0.55f, 0.32f, 0.18f);
-        if (spot == CafeSpot.CroissantCheese)
-            return new Color(0.95f, 0.82f, 0.35f);
-        if (spot == CafeSpot.Toaster && session != null)
-            return CroissantColor(session.ToasterReady);
-        if (IsSyrup(spot))
-            return SyrupColor(SyrupId(spot));
-        if (spot == CafeSpot.Tray && session != null && index >= 0 && index < session.Trays.Length && session.Trays[index].Occupied)
-            return CupTint(session.Trays[index]);
-        if (spot == CafeSpot.WaterTray && session != null && session.WaterCup.Occupied)
-            return CupTint(session.WaterCup);
-        return new Color(0.85f, 0.75f, 0.6f);
+        if (spot == CafeSpot.TeaBlack)
+            return 8;
+        if (spot == CafeSpot.TeaGreen)
+            return 9;
+        if (spot == CafeSpot.TeaMatcha)
+            return 10;
+        if (spot == CafeSpot.TeaWhite)
+            return 11;
+        return 0;
     }
 
-    static Color CupTint(TrayCup cup)
-    {
-        Color color = cup.Hot ? new Color(0.93f, 0.35f, 0.30f) : new Color(0.55f, 0.82f, 0.95f);
-        if (cup.Coffee)
-            color = Color.Lerp(color, new Color(0.28f, 0.14f, 0.08f), 0.65f);
-        if (cup.Shot)
-            color = Color.Lerp(color, new Color(0.18f, 0.08f, 0.04f), 0.45f);
-        if (cup.Water == 1)
-            color = Color.Lerp(color, new Color(0.95f, 0.55f, 0.30f), 0.35f);
-        else if (cup.Water == 2)
-            color = Color.Lerp(color, new Color(0.40f, 0.70f, 0.95f), 0.35f);
-        if (cup.Syrup != 0)
-            color = Color.Lerp(color, SyrupColor(cup.Syrup), 0.55f);
-        if (cup.Ice)
-            color = Color.Lerp(color, new Color(0.8f, 0.95f, 1f), 0.35f);
-        return color;
-    }
-
-    static Color CroissantColor(PastryType pastry)
-    {
-        if (pastry == PastryType.Chocolate)
-            return new Color(0.55f, 0.32f, 0.18f);
-        if (pastry == PastryType.Cheese)
-            return new Color(0.95f, 0.82f, 0.35f);
-        if (pastry == PastryType.Plain)
-            return new Color(0.93f, 0.78f, 0.45f);
-        return new Color(0.85f, 0.75f, 0.6f);
-    }
 }

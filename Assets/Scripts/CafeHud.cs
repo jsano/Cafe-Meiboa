@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 public class CafeHud : MonoBehaviour
@@ -62,6 +65,40 @@ public class CafeHud : MonoBehaviour
     [SerializeField] SlotView[] slotViews = { new SlotView(), new SlotView() };
 
     public bool RepairHeld => repairHold != null && repairHold.Held;
+
+    readonly List<RaycastResult> slotHits = new List<RaycastResult>();
+
+    public int SlotUnderPointer()
+    {
+        if (EventSystem.current == null)
+            return -1;
+
+        PointerEventData data = new PointerEventData(EventSystem.current);
+        if (Mouse.current != null)
+            data.position = Mouse.current.position.ReadValue();
+        else
+            data.position = Input.mousePosition;
+
+        slotHits.Clear();
+        EventSystem.current.RaycastAll(data, slotHits);
+        for (int h = 0; h < slotHits.Count; h++)
+        {
+            GameObject hit = slotHits[h].gameObject;
+            if (hit == null)
+                continue;
+
+            for (int i = 0; i < slotViews.Length; i++)
+            {
+                GameObject root = slotViews[i].Root;
+                if (root == null)
+                    continue;
+                if (hit == root || hit.transform.IsChildOf(root.transform))
+                    return i;
+            }
+        }
+
+        return -1;
+    }
 
     public void Bind(CafeSession cafeSession)
     {
@@ -229,7 +266,12 @@ public class CafeHud : MonoBehaviour
             return;
         }
 
-        view.Name.text = cat.Accepted ? CafeSession.KindName(cat.Kind) : "Click to take";
+        if (!cat.Accepted)
+            view.Name.text = "Click to take";
+        else if (session.Focus == index && cat.DrinkReady)
+            view.Name.text = "Drag cup here";
+        else
+            view.Name.text = CafeSession.KindName(cat.Kind);
         view.Name.color = new Color(0.24f, 0.14f, 0.10f);
         view.PatienceRoot.SetActive(cat.Accepted);
         if (cat.Accepted && cat.PatienceMax > 0f)
@@ -243,9 +285,6 @@ public class CafeHud : MonoBehaviour
         if (session.Focus == index)
             body = Color.Lerp(body, Color.white, 0.38f);
         view.Body.color = body;
-        Color ear = Color.Lerp(body, Color.black, 0.25f);
-        view.EarLeft.color = ear;
-        view.EarRight.color = ear;
     }
 
     void RefreshClose()
@@ -308,7 +347,7 @@ public class CafeHud : MonoBehaviour
         if (session.BrewTiming)
             return "Stop";
         if (session.FocusReady)
-            return "Click the cat to serve";
+            return "Drag the cup to the cat";
         return "Drag a straw to time";
     }
 

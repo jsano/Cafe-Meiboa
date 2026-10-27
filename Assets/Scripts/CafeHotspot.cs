@@ -16,7 +16,7 @@ public enum CafeSpot
     SyrupChocolate,
     SyrupVanilla,
     SyrupStrawberry,
-    SyrupHoney,
+    SyrupCaramel,
     Tray,
     Trash,
     Toaster,
@@ -26,7 +26,14 @@ public enum CafeSpot
     Grinder,
     CoffeePuck,
     WaterTray,
-    Plate
+    Plate,
+    SyrupWhiteChocolate,
+    SyrupCoconut,
+    SyrupAlmond,
+    TeaBlack,
+    TeaGreen,
+    TeaMatcha,
+    TeaWhite
 }
 
 public class CafeHotspot : MonoBehaviour

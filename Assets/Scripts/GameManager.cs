@@ -13,7 +13,7 @@ public class GameManager : MonoBehaviour
         session.Begin();
         hud.Bind(session);
         if (board != null)
-            board.Attach(session);
+            board.Attach(session, hud);
     }
 
     void Update()
