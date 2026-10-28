@@ -215,10 +215,10 @@ public class CafeBoard : MonoBehaviour
         if (session == null)
             return;
 
-        SetFill(grinderFill, session.GrinderBusy, session.GrinderTimer, CafeBalance.GrindSeconds);
-        SetFill(espressoFill, session.EspressoBusy, session.EspressoTimer, CafeBalance.EspressoSeconds);
-        SetFill(coffeeFill, session.CoffeeBusy, session.CoffeeTimer, CafeBalance.CoffeeSeconds);
-        SetFill(toasterFill, session.ToasterBusy, session.ToasterTimer, CafeBalance.ToastSeconds);
+        SetFill(grinderFill, session.GrinderBusy, session.GrinderTimer, session.GrindDuration);
+        SetFill(espressoFill, session.EspressoBusy, session.EspressoTimer, session.EspressoDuration);
+        SetFill(coffeeFill, session.CoffeeBusy, session.CoffeeTimer, session.CoffeeDuration);
+        SetFill(toasterFill, session.ToasterBusy, session.ToasterTimer, session.ToastDuration);
     }
 
     static void SetFill(Image image, bool busy, float remaining, float duration)

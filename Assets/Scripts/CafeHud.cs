@@ -1,6 +1,7 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
@@ -68,7 +69,7 @@ public class CafeHud : MonoBehaviour
         LiftDogPrompt();
         Wire(actionButton, session.PressStation);
         Wire(closeButton, session.Continue);
-        Wire(playAgainButton, session.Begin);
+        Wire(playAgainButton, () => SceneManager.LoadScene("Title"));
         PrepareStationForDrag();
         Refresh();
     }
@@ -126,9 +127,15 @@ public class CafeHud : MonoBehaviour
         shopHint.text = session.Status + "\n" + session.StockAdvice();
         beansLabel.text = "Beans x4  ($" + CafeBalance.BeanPackCost + ")     have " + session.Beans;
         milkLabel.text = "Milk x4  ($" + CafeBalance.MilkPackCost + ")     have " + session.Milk;
-        fasterLabel.text = UpgradeButton("Faster brew", "shorter timing, wider green", UpgradeType.FasterBrew);
-        patienceLabel.text = UpgradeButton("Longer patience", "cats wait 23s", UpgradeType.LongerPatience);
-        rentUpgradeLabel.text = UpgradeButton("Cheaper rent", "dog charges $20", UpgradeType.CheaperRent);
+        fasterLabel.text = session.UpgradeOffer(UpgradeType.FasterBrew);
+        patienceLabel.text = session.UpgradeOffer(UpgradeType.LongerPatience);
+        rentUpgradeLabel.text = session.UpgradeOffer(UpgradeType.CheaperRent);
+        if (fasterButton != null)
+            fasterButton.interactable = !session.UpgradeMaxed(UpgradeType.FasterBrew);
+        if (patienceButton != null)
+            patienceButton.interactable = !session.UpgradeMaxed(UpgradeType.LongerPatience);
+        if (rentUpgradeButton != null)
+            rentUpgradeButton.interactable = !session.UpgradeMaxed(UpgradeType.CheaperRent);
 
         openLabel.text = "Open cafe";
     }
@@ -280,15 +287,6 @@ public class CafeHud : MonoBehaviour
         if (session.FocusReady)
             return "Drag the cup to the cat";
         return "Build the drink";
-    }
-
-    string UpgradeButton(string title, string detail, UpgradeType type)
-    {
-        if (session.Upgrade == type)
-            return "Owned: " + title;
-        if (session.Upgrade != UpgradeType.None)
-            return title;
-        return title + "  ($" + CafeBalance.UpgradeCost + ")\n" + detail;
     }
 
     [Serializable]

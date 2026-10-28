@@ -46,7 +46,9 @@ public class CafeSession
     public int Cash = CafeBalance.StartingCash;
     public int Beans;
     public int Milk;
-    public UpgradeType Upgrade = UpgradeType.None;
+    public int BrewLevel;
+    public int PatienceLevel;
+    public int RentLevel;
     public bool DogPresent;
     public float DogTime;
     public bool DogVisited;
@@ -97,11 +99,16 @@ public class CafeSession
     int heldSlot = -1;
     bool repairHeld;
 
-    public int RentDue => Upgrade == UpgradeType.CheaperRent ? CafeBalance.CheapRentCost : CafeBalance.RentCost;
+    public int RentDue => RentAt(RentLevel);
 
     public int DrinksToday => Day == 1 ? 4 : Day == 2 ? 6 : 8;
 
-    public float GreenHalfWidth => Upgrade == UpgradeType.FasterBrew ? CafeBalance.FastGreenHalf : CafeBalance.GreenHalf;
+    public float GreenHalfWidth => CafeBalance.GreenHalf;
+
+    public float GrindDuration => MachineSeconds(CafeBalance.GrindSeconds);
+    public float EspressoDuration => MachineSeconds(CafeBalance.EspressoSeconds);
+    public float CoffeeDuration => MachineSeconds(CafeBalance.CoffeeSeconds);
+    public float ToastDuration => MachineSeconds(CafeBalance.ToastSeconds);
 
     public bool CanOpen => true;
 
@@ -149,7 +156,9 @@ public class CafeSession
         Cash = CafeBalance.StartingCash;
         Beans = 0;
         Milk = 0;
-        Upgrade = UpgradeType.None;
+        BrewLevel = 0;
+        PatienceLevel = 0;
+        RentLevel = 0;
         DogPresent = false;
         DogTime = 0f;
         DogVisited = false;
@@ -249,20 +258,63 @@ public class CafeSession
     {
         if (Phase != DayPhase.Shop || type == UpgradeType.None)
             return;
-        if (Upgrade != UpgradeType.None)
+        if (UpgradeMaxed(type))
         {
-            Status = "You already picked an upgrade.";
+            Status = UpgradeName(type) + " is maxed.";
             return;
         }
-        if (Cash < CafeBalance.UpgradeCost)
+
+        int price = UpgradePrice(type);
+        if (Cash < price)
         {
             Status = "Not enough cash for that upgrade.";
             return;
         }
 
-        Cash -= CafeBalance.UpgradeCost;
-        Upgrade = type;
-        Status = UpgradeName(type) + " installed.";
+        Cash -= price;
+        RaiseUpgrade(type);
+        Status = UpgradeName(type) + " improved.";
+    }
+
+    public int UpgradeLevel(UpgradeType type)
+    {
+        if (type == UpgradeType.FasterBrew)
+            return BrewLevel;
+        if (type == UpgradeType.LongerPatience)
+            return PatienceLevel;
+        if (type == UpgradeType.CheaperRent)
+            return RentLevel;
+        return 0;
+    }
+
+    public int UpgradePrice(UpgradeType type)
+    {
+        return CafeBalance.UpgradeBaseCost + UpgradeLevel(type) * CafeBalance.UpgradeCostStep;
+    }
+
+    public bool UpgradeMaxed(UpgradeType type)
+    {
+        int level = UpgradeLevel(type);
+        if (type == UpgradeType.FasterBrew)
+            return Mathf.Approximately(MachineScale(level), MachineScale(level + 1));
+        if (type == UpgradeType.LongerPatience)
+            return Mathf.Approximately(PatienceAt(level), PatienceAt(level + 1));
+        if (type == UpgradeType.CheaperRent)
+            return RentAt(level) == RentAt(level + 1);
+        return true;
+    }
+
+    public string UpgradeOffer(UpgradeType type)
+    {
+        string name = UpgradeName(type);
+        int level = UpgradeLevel(type);
+        if (UpgradeMaxed(type))
+            return name + "  max\n" + UpgradeStat(type, level);
+
+        string title = name;
+        if (level > 0)
+            title += " " + level;
+        return title + "  ($" + UpgradePrice(type) + ")\n" + UpgradeChange(type, level);
     }
 
     public void PayRent()
@@ -369,7 +421,7 @@ public class CafeSession
 
         Beans--;
         GrinderBusy = true;
-        GrinderTimer = CafeBalance.GrindSeconds;
+        GrinderTimer = GrindDuration;
         Status = "Grinding beans.";
     }
 
@@ -400,7 +452,7 @@ public class CafeSession
 
         PuckReady = false;
         EspressoBusy = true;
-        EspressoTimer = CafeBalance.EspressoSeconds;
+        EspressoTimer = EspressoDuration;
         NoteStationUse(BreakStation.CoffeePuck);
         NoteStationUse(BreakStation.Espresso);
         Status = "Pulling a shot.";
@@ -419,7 +471,7 @@ public class CafeSession
             return;
 
         CoffeeBusy = true;
-        CoffeeTimer = CafeBalance.CoffeeSeconds;
+        CoffeeTimer = CoffeeDuration;
         NoteStationUse(BreakStation.Coffee);
         Status = "Brewing coffee.";
     }
@@ -836,7 +888,7 @@ public class CafeSession
 
         ToasterBusy = true;
         NoteStationUse(BreakStation.Toaster);
-        ToasterTimer = CafeBalance.ToastSeconds;
+        ToasterTimer = ToastDuration;
         toasting = type;
         Status = "Toasting a " + PastryName(type).ToLower() + " croissant.";
     }
@@ -1003,9 +1055,11 @@ public class CafeSession
 
     public string UpgradeLabel()
     {
-        if (Upgrade == UpgradeType.None)
+        if (BrewLevel == 0 && PatienceLevel == 0 && RentLevel == 0)
             return "none";
-        return UpgradeName(Upgrade);
+        return "Brew " + BrewLevel
+            + ", Patience " + PatienceLevel
+            + ", Rent " + RentLevel;
     }
 
     public string PastryChoiceLabel(int index)
@@ -1124,14 +1178,24 @@ public class CafeSession
     {
         queue.Clear();
         int count = DrinksToday;
+        bool[] pastrySlot = new bool[count];
+        int pastryCount = Mathf.Min(PastriesToday, count);
+        for (int n = 0; n < pastryCount; n++)
+        {
+            int slot = UnityEngine.Random.Range(0, count);
+            while (pastrySlot[slot])
+                slot = UnityEngine.Random.Range(0, count);
+            pastrySlot[slot] = true;
+        }
+
         for (int i = 0; i < count; i++)
         {
-            PastryType pastry = PastryRequest(Day, i);
+            PastryType pastry = pastrySlot[i] ? RandomPastry() : PastryType.None;
             DrinkType drink = DrinkType.BlackCoffee;
             CustomerKind kind = CustomerKind.Regular;
             if (pastry == PastryType.None)
             {
-                drink = DrinkFor(i);
+                drink = DrinkFor();
                 kind = DrinkRecipes.Get(drink).Kind;
             }
 
@@ -1144,25 +1208,11 @@ public class CafeSession
         }
     }
 
-    static PastryType PastryRequest(int day, int index)
+    int PastriesToday => Day == 1 ? 2 : 3;
+
+    static PastryType RandomPastry()
     {
-        if (day == 1 && index == 1)
-            return PastryType.Chocolate;
-        if (day == 1 && index == 3)
-            return PastryType.Plain;
-        if (day == 2 && index == 0)
-            return PastryType.Cheese;
-        if (day == 2 && index == 2)
-            return PastryType.Plain;
-        if (day == 2 && index == 4)
-            return PastryType.Chocolate;
-        if (day == 3 && index == 1)
-            return PastryType.Plain;
-        if (day == 3 && index == 3)
-            return PastryType.Chocolate;
-        if (day == 3 && index == 6)
-            return PastryType.Cheese;
-        return PastryType.None;
+        return (PastryType)UnityEngine.Random.Range(1, 4);
     }
 
     void TickRepair(float dt)
@@ -1249,7 +1299,7 @@ public class CafeSession
         if (!BrewTiming)
             return;
 
-        float speed = Upgrade == UpgradeType.FasterBrew ? CafeBalance.FastMarkerSpeed : CafeBalance.MarkerSpeed;
+        float speed = CafeBalance.MarkerSpeed;
         Marker01 += markerDir * speed * dt;
         if (Marker01 >= 1f)
         {
@@ -1527,16 +1577,14 @@ public class CafeSession
             Status = "The dog left.";
     }
 
-    DrinkType DrinkFor(int index)
+    DrinkType DrinkFor()
     {
-        if (Day == 1)
-        {
-            DrinkType[] shortMenu = DrinkRecipes.AtMostSteps(4);
-            return shortMenu[index % shortMenu.Length];
-        }
-
-        DrinkType[] menu = (DrinkType[])Enum.GetValues(typeof(DrinkType));
-        return menu[((Day - 1) * DrinksToday + index) % menu.Length];
+        DrinkType[] menu = Day == 1
+            ? DrinkRecipes.AtMostSteps(4)
+            : (DrinkType[])Enum.GetValues(typeof(DrinkType));
+        if (menu.Length == 0)
+            return DrinkType.BlackCoffee;
+        return menu[UnityEngine.Random.Range(0, menu.Length)];
     }
 
     bool RefuseBroken(BreakStation station)
@@ -1957,9 +2005,83 @@ public class CafeSession
 
     float MaxPatience()
     {
-        return Upgrade == UpgradeType.LongerPatience
-            ? CafeBalance.LongPatienceSeconds
-            : CafeBalance.PatienceSeconds;
+        return PatienceAt(PatienceLevel);
+    }
+
+    void RaiseUpgrade(UpgradeType type)
+    {
+        if (type == UpgradeType.FasterBrew)
+            BrewLevel++;
+        else if (type == UpgradeType.LongerPatience)
+            PatienceLevel++;
+        else if (type == UpgradeType.CheaperRent)
+            RentLevel++;
+    }
+
+    string UpgradeStat(UpgradeType type, int level)
+    {
+        if (type == UpgradeType.FasterBrew)
+            return "machines " + Seconds(MachineSeconds(CafeBalance.EspressoSeconds, level))
+                + ", toast " + Seconds(MachineSeconds(CafeBalance.ToastSeconds, level));
+        if (type == UpgradeType.LongerPatience)
+            return "cats wait " + Mathf.RoundToInt(PatienceAt(level)) + "s";
+        if (type == UpgradeType.CheaperRent)
+            return "dog charges $" + RentAt(level);
+        return "";
+    }
+
+    string UpgradeChange(UpgradeType type, int level)
+    {
+        int next = level + 1;
+        if (type == UpgradeType.FasterBrew)
+        {
+            return "machines " + Seconds(MachineSeconds(CafeBalance.EspressoSeconds, level))
+                + " to " + Seconds(MachineSeconds(CafeBalance.EspressoSeconds, next))
+                + ", toast " + Seconds(MachineSeconds(CafeBalance.ToastSeconds, level))
+                + " to " + Seconds(MachineSeconds(CafeBalance.ToastSeconds, next));
+        }
+        if (type == UpgradeType.LongerPatience)
+        {
+            return "cats wait " + Mathf.RoundToInt(PatienceAt(level)) + "s to "
+                + Mathf.RoundToInt(PatienceAt(next)) + "s";
+        }
+        if (type == UpgradeType.CheaperRent)
+            return "dog charges $" + RentAt(level) + " to $" + RentAt(next);
+        return "";
+    }
+
+    float MachineSeconds(float seconds)
+    {
+        return MachineSeconds(seconds, BrewLevel);
+    }
+
+    static float MachineSeconds(float seconds, int level)
+    {
+        return seconds * MachineScale(level);
+    }
+
+    static float MachineScale(int level)
+    {
+        return Mathf.Max(1f - CafeBalance.MachineTimeStep * level, CafeBalance.MachineTimeMin);
+    }
+
+    static string Seconds(float value)
+    {
+        string text = value.ToString("0.0");
+        if (text.EndsWith(".0"))
+            text = text.Substring(0, text.Length - 2);
+        return text + "s";
+    }
+
+    static float PatienceAt(int level)
+    {
+        return Mathf.Min(CafeBalance.PatienceSeconds + CafeBalance.PatienceStep * level, CafeBalance.PatienceMax);
+    }
+
+    static int RentAt(int level)
+    {
+        int cost = CafeBalance.RentCost - CafeBalance.RentStep * level;
+        return cost < CafeBalance.RentMin ? CafeBalance.RentMin : cost;
     }
 
     static int BasePay(DrinkType drink)
