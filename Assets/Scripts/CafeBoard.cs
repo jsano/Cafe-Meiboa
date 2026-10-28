@@ -421,6 +421,12 @@ public class CafeBoard : MonoBehaviour
             return;
         }
 
+        if (customer >= 0 && (spot.Spot == CafeSpot.Toaster || spot.Spot == CafeSpot.Plate))
+        {
+            session.OfferPastry(customer, spot.Spot == CafeSpot.Plate);
+            return;
+        }
+
         if (target == null || target == spot)
             return;
 
@@ -460,12 +466,18 @@ public class CafeBoard : MonoBehaviour
             session.AddStraw(target.Index);
         else if (source.Spot == CafeSpot.Ice && target.Spot == CafeSpot.Tray)
             session.AddIce(target.Index);
+        else if (source.Spot == CafeSpot.Milk && target.Spot == CafeSpot.Tray)
+            session.AddMilk(target.Index);
         else if (source.Spot == CafeSpot.Milk && target.Spot == CafeSpot.SteamedMilk)
             session.SteamMilk();
+        else if (source.Spot == CafeSpot.SteamedMilk && target.Spot == CafeSpot.Tray)
+            session.AddSteamedMilk(target.Index);
+        else if (source.Spot == CafeSpot.SteamedMilk)
+            session.Status = "Pour the steamed milk into a cup.";
         else if (IsSyrup(source.Spot) && target.Spot == CafeSpot.Tray)
             session.AddSyrup(target.Index, SyrupId(source.Spot));
         else if (IsTea(source.Spot) && target.Spot == CafeSpot.Tray)
-            session.AddSyrup(target.Index, TeaId(source.Spot));
+            session.AddTea(target.Index, TeaId(source.Spot));
         else if (source.Spot == CafeSpot.Tray && target.Spot == CafeSpot.Trash)
             session.TrashCup(source.Index);
         else if (source.Spot == CafeSpot.Tray && target.Spot == CafeSpot.Tray)
@@ -496,11 +508,13 @@ public class CafeBoard : MonoBehaviour
             return false;
         if (spot.Spot == CafeSpot.Trash
             || spot.Spot == CafeSpot.Grinder
-            || spot.Spot == CafeSpot.SteamedMilk
             || spot.Spot == CafeSpot.WaterHot
-            || spot.Spot == CafeSpot.WaterCold
-            || spot.Spot == CafeSpot.Plate)
+            || spot.Spot == CafeSpot.WaterCold)
             return false;
+        if (spot.Spot == CafeSpot.Plate)
+            return session.Plated != PastryType.None;
+        if (spot.Spot == CafeSpot.SteamedMilk)
+            return session.SteamedServings > 0;
         if (spot.Spot == CafeSpot.Coffee)
             return session.CoffeeUses > 0 && !session.CoffeeBusy;
         if (spot.Spot == CafeSpot.CoffeePuck)
@@ -745,7 +759,7 @@ public class CafeBoard : MonoBehaviour
             return matchaTeaSprite;
         if (spot.Spot == CafeSpot.TeaWhite)
             return whiteTeaSprite;
-        if (spot.Spot == CafeSpot.Milk)
+        if (spot.Spot == CafeSpot.Milk || spot.Spot == CafeSpot.SteamedMilk)
             return milkSprite;
         if (spot.Spot == CafeSpot.Ice)
             return iceSprite;
@@ -765,6 +779,8 @@ public class CafeBoard : MonoBehaviour
             return session.WaterCup.Hot ? hotCupSprite : coldCupSprite;
         if (spot.Spot == CafeSpot.Toaster)
             return CroissantSprite(session.ToasterHeld);
+        if (spot.Spot == CafeSpot.Plate)
+            return CroissantSprite(session.Plated);
         return null;
     }
 
@@ -964,13 +980,13 @@ public class CafeBoard : MonoBehaviour
     static int TeaId(CafeSpot spot)
     {
         if (spot == CafeSpot.TeaBlack)
-            return 8;
+            return 1;
         if (spot == CafeSpot.TeaGreen)
-            return 9;
+            return 2;
         if (spot == CafeSpot.TeaMatcha)
-            return 10;
+            return 3;
         if (spot == CafeSpot.TeaWhite)
-            return 11;
+            return 4;
         return 0;
     }
 

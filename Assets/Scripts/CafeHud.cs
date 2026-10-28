@@ -129,6 +129,11 @@ public class CafeHud : MonoBehaviour
             int slot = i;
             Button button = slotViews[i].Root != null ? slotViews[i].Root.GetComponent<Button>() : null;
             Wire(button, () => session.ClickSlot(slot));
+            if (slotViews[i].Name != null)
+            {
+                slotViews[i].Name.enableWordWrapping = true;
+                slotViews[i].Name.overflowMode = TextOverflowModes.Overflow;
+            }
         }
 
         Refresh();
@@ -268,10 +273,12 @@ public class CafeHud : MonoBehaviour
 
         if (!cat.Accepted)
             view.Name.text = "Click to take";
+        else if (cat.WantedPastry != PastryType.None)
+            view.Name.text = "Drag croissant here";
         else if (session.Focus == index && cat.DrinkReady)
             view.Name.text = "Drag cup here";
         else
-            view.Name.text = CafeSession.KindName(cat.Kind);
+            view.Name.text = DrinkRecipes.Get(cat.Drink).Steps;
         view.Name.color = new Color(0.24f, 0.14f, 0.10f);
         view.PatienceRoot.SetActive(cat.Accepted);
         if (cat.Accepted && cat.PatienceMax > 0f)
@@ -348,7 +355,7 @@ public class CafeHud : MonoBehaviour
             return "Stop";
         if (session.FocusReady)
             return "Drag the cup to the cat";
-        return "Drag a straw to time";
+        return "Build the drink";
     }
 
     string UpgradeButton(string title, string detail, UpgradeType type)
