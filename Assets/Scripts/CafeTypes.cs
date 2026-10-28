@@ -84,13 +84,6 @@ public enum BreakStation
     Espresso
 }
 
-public enum PrepType
-{
-    None,
-    Espresso,
-    SteamedMilk
-}
-
 [Flags]
 public enum CupBits
 {
@@ -384,7 +377,7 @@ public static class DrinkRecipes
 
 public static class CafeBalance
 {
-    public const int StartingCash = 8;
+    public const int StartingCash = 16;
     public const int CoffeePay = 10;
     public const int LattePay = 14;
     public const int SyrupPay = 16;

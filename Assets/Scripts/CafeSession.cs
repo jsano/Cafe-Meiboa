@@ -46,9 +46,7 @@ public class CafeSession
     public int Cash = CafeBalance.StartingCash;
     public int Beans;
     public int Milk;
-    public bool SyrupUnlocked;
     public UpgradeType Upgrade = UpgradeType.None;
-    public PrepType Prep = PrepType.None;
     public bool DogPresent;
     public float DogTime;
     public bool DogVisited;
@@ -151,9 +149,7 @@ public class CafeSession
         Cash = CafeBalance.StartingCash;
         Beans = 0;
         Milk = 0;
-        SyrupUnlocked = false;
         Upgrade = UpgradeType.None;
-        Prep = PrepType.None;
         DogPresent = false;
         DogTime = 0f;
         DogVisited = false;
@@ -249,26 +245,6 @@ public class CafeSession
         Status = "Bought 4 milk. Lattes can show up from day 2.";
     }
 
-    public void BuySyrup()
-    {
-        if (Phase != DayPhase.Shop)
-            return;
-        if (SyrupUnlocked)
-        {
-            Status = "Syrup is already unlocked.";
-            return;
-        }
-        if (Cash < CafeBalance.SyrupCost)
-        {
-            Status = "Not enough cash for syrup.";
-            return;
-        }
-
-        Cash -= CafeBalance.SyrupCost;
-        SyrupUnlocked = true;
-        Status = "Syrup unlocked. Sweet tooths arrive on day 3.";
-    }
-
     public void BuyUpgrade(UpgradeType type)
     {
         if (Phase != DayPhase.Shop || type == UpgradeType.None)
@@ -286,64 +262,7 @@ public class CafeSession
 
         Cash -= CafeBalance.UpgradeCost;
         Upgrade = type;
-        if (Prep != PrepType.None)
-        {
-            Prep = PrepType.None;
-            Status = UpgradeName(type) + " installed. Stored prep was cleared.";
-        }
-        else
-        {
-            Status = UpgradeName(type) + " installed.";
-        }
-    }
-
-    public void CyclePastry(int index)
-    {
-        if (Phase != DayPhase.Shop || index < 0 || index >= PastryChoice.Length)
-            return;
-
-        PastryChoice[index] = PastryChoice[index] % 3 + 1;
-        Status = "Croissant " + (index + 1) + ": " + PastryName((PastryType)PastryChoice[index]) + ".";
-    }
-
-    public void PrepEspresso()
-    {
-        if (Phase != DayPhase.Shop)
-            return;
-        if (Prep != PrepType.None)
-        {
-            Status = "The prep slot already holds something.";
-            return;
-        }
-        if (Beans <= 0)
-        {
-            Status = "Need a bean to pull a spare shot.";
-            return;
-        }
-
-        Beans--;
-        Prep = PrepType.Espresso;
-        Status = "Spare shot stored. It skips beans and brew on the next drink.";
-    }
-
-    public void PrepMilk()
-    {
-        if (Phase != DayPhase.Shop)
-            return;
-        if (Prep != PrepType.None)
-        {
-            Status = "The prep slot already holds something.";
-            return;
-        }
-        if (Milk <= 0)
-        {
-            Status = "Need milk to steam a spare.";
-            return;
-        }
-
-        Milk--;
-        Prep = PrepType.SteamedMilk;
-        Status = "Steamed milk stored. It skips the milk step on the next latte.";
+        Status = UpgradeName(type) + " installed.";
     }
 
     public void PayRent()
@@ -706,8 +625,14 @@ public class CafeSession
         }
 
         Trays[tray].Straw = true;
-        Status = "Straw added.";
-        TryFinishDrink();
+        
+        ActiveTray = tray;
+        BrewLocked = true;
+        BrewTiming = true;
+        brewScored = false;
+        Marker01 = 0f;
+        markerDir = 1;
+        Status = "Stop in the green zone.";
     }
 
     public void AddIce(int tray)
@@ -939,6 +864,41 @@ public class CafeSession
         Status = PastryName(Plated) + " croissant is on the plate.";
     }
 
+    public void TrashCroissant(PastryType type)
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (type == PastryType.None)
+            return;
+
+        Status = "Tossed the " + PastryName(type).ToLower() + " croissant.";
+    }
+
+    public void TrashReadyCroissant(bool fromPlate)
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+
+        PastryType type = fromPlate ? Plated : ToasterReady;
+        if (type == PastryType.None || (!fromPlate && ToasterBusy))
+        {
+            Status = fromPlate ? "The plate is empty." : "Nothing in the toaster to toss.";
+            return;
+        }
+
+        if (fromPlate)
+            Plated = PastryType.None;
+        else
+            ToasterReady = PastryType.None;
+        Status = "Tossed the " + PastryName(type).ToLower() + " croissant.";
+    }
+
     public void Continue()
     {
         if (Phase != DayPhase.CloseOfDay)
@@ -1020,11 +980,6 @@ public class CafeSession
             Status = "The timer is not running.";
             return;
         }
-        if (MachineBroken)
-        {
-            Status = "Hold Repair until the " + BrokenName + " is fixed.";
-            return;
-        }
 
         BrewTiming = false;
         float score = ScoreMarker();
@@ -1044,15 +999,6 @@ public class CafeSession
         if (QuestComplete)
             return QuestRewarded ? "Quest paid" : "Quest ready";
         return "Quest " + CleanServes + "/" + CafeBalance.QuestGoal;
-    }
-
-    public string PrepLabel()
-    {
-        if (Prep == PrepType.Espresso)
-            return "spare shot";
-        if (Prep == PrepType.SteamedMilk)
-            return "steamed milk";
-        return "none";
     }
 
     public string UpgradeLabel()
@@ -1079,10 +1025,6 @@ public class CafeSession
     public string StockAdvice()
     {
         string text = "This shift is " + DrinksToday + " drinks. You have " + Beans + " beans and " + Milk + " milk.";
-        if (Prep == PrepType.Espresso)
-            text += " The spare shot is ready to pour.";
-        if (Prep == PrepType.SteamedMilk)
-            text += " Steamed milk is ready to pour.";
         return text;
     }
 
@@ -1304,7 +1246,7 @@ public class CafeSession
 
     void TickTiming(float dt)
     {
-        if (!BrewTiming || MachineBroken)
+        if (!BrewTiming)
             return;
 
         float speed = Upgrade == UpgradeType.FasterBrew ? CafeBalance.FastMarkerSpeed : CafeBalance.MarkerSpeed;
@@ -1824,6 +1766,15 @@ public class CafeSession
             return false;
         }
 
+        bool needsTiming = (DrinkRecipes.Get(cat.Drink).Parts & CupBits.Straw) != 0;
+        if (needsTiming && !brewScored)
+        {
+            cat.DrinkReady = false;
+            FocusReady = false;
+            ActiveTray = tray;
+            return false;
+        }
+
         bool newlyReady = !cat.DrinkReady;
         cat.DrinkReady = true;
         FocusReady = true;
@@ -1859,6 +1810,11 @@ public class CafeSession
         if (!DrinkRecipes.Matches(Trays[tray], cat.Drink))
         {
             Status = "They don't want that.";
+            return;
+        }
+        if ((DrinkRecipes.Get(cat.Drink).Parts & CupBits.Straw) != 0 && !brewScored)
+        {
+            Status = BrewTiming ? "Stop in the green zone." : "Drag a straw onto the cup.";
             return;
         }
 

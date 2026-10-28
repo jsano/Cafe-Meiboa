@@ -595,6 +595,12 @@ public class CafeBoard : MonoBehaviour
             session.HeatCroissant(PastryType.Chocolate);
         else if (source.Spot == CafeSpot.CroissantCheese && target.Spot == CafeSpot.Toaster)
             session.HeatCroissant(PastryType.Cheese);
+        else if (CroissantType(source.Spot) != PastryType.None && target.Spot == CafeSpot.Trash)
+            session.TrashCroissant(CroissantType(source.Spot));
+        else if (source.Spot == CafeSpot.Toaster && target.Spot == CafeSpot.Trash)
+            session.TrashReadyCroissant(false);
+        else if (source.Spot == CafeSpot.Plate && target.Spot == CafeSpot.Trash)
+            session.TrashReadyCroissant(true);
         else if (source.Spot == CafeSpot.Toaster && target.Spot == CafeSpot.Plate)
             session.PlateCroissant();
         else if (source.Spot == CafeSpot.Toaster)
@@ -883,6 +889,17 @@ public class CafeBoard : MonoBehaviour
         if (spot.Spot == CafeSpot.Plate)
             return CroissantSprite(session.Plated);
         return null;
+    }
+
+    static PastryType CroissantType(CafeSpot spot)
+    {
+        if (spot == CafeSpot.CroissantPlain)
+            return PastryType.Plain;
+        if (spot == CafeSpot.CroissantChocolate)
+            return PastryType.Chocolate;
+        if (spot == CafeSpot.CroissantCheese)
+            return PastryType.Cheese;
+        return PastryType.None;
     }
 
     Sprite CroissantSprite(PastryType pastry)

@@ -14,13 +14,9 @@ public class CafeHud : MonoBehaviour
     [SerializeField] TextMeshProUGUI shopHint;
     [SerializeField] TextMeshProUGUI beansLabel;
     [SerializeField] TextMeshProUGUI milkLabel;
-    [SerializeField] TextMeshProUGUI syrupLabel;
     [SerializeField] TextMeshProUGUI fasterLabel;
     [SerializeField] TextMeshProUGUI patienceLabel;
     [SerializeField] TextMeshProUGUI rentUpgradeLabel;
-    [SerializeField] TextMeshProUGUI[] pastryLabels = new TextMeshProUGUI[3];
-    [SerializeField] TextMeshProUGUI prepShotLabel;
-    [SerializeField] TextMeshProUGUI prepMilkLabel;
     [SerializeField] GameObject dogRow;
     [SerializeField] Button payButton;
     [SerializeField] TextMeshProUGUI payLabel;
@@ -28,13 +24,9 @@ public class CafeHud : MonoBehaviour
 
     [SerializeField] Button beansButton;
     [SerializeField] Button milkButton;
-    [SerializeField] Button syrupButton;
     [SerializeField] Button fasterButton;
     [SerializeField] Button patienceButton;
     [SerializeField] Button rentUpgradeButton;
-    [SerializeField] Button[] pastryButtons = new Button[3];
-    [SerializeField] Button prepShotButton;
-    [SerializeField] Button prepMilkButton;
     [SerializeField] Button openButton;
     [SerializeField] Button actionButton;
     [SerializeField] Button closeButton;
@@ -67,18 +59,10 @@ public class CafeHud : MonoBehaviour
         session = cafeSession;
         Wire(beansButton, session.BuyBeans);
         Wire(milkButton, session.BuyMilk);
-        Wire(syrupButton, session.BuySyrup);
         Wire(fasterButton, () => session.BuyUpgrade(UpgradeType.FasterBrew));
         Wire(patienceButton, () => session.BuyUpgrade(UpgradeType.LongerPatience));
         Wire(rentUpgradeButton, () => session.BuyUpgrade(UpgradeType.CheaperRent));
-        for (int i = 0; i < pastryButtons.Length; i++)
-        {
-            int slot = i;
-            Wire(pastryButtons[i], () => session.CyclePastry(slot));
-        }
 
-        Wire(prepShotButton, session.PrepEspresso);
-        Wire(prepMilkButton, session.PrepMilk);
         Wire(payButton, session.PayRent);
         Wire(openButton, session.OpenCafe);
         LiftDogPrompt();
@@ -118,7 +102,6 @@ public class CafeHud : MonoBehaviour
             + "   Milk " + session.Milk
             + "   Pastry " + session.PastryCount
             + "   " + session.QuestLabel()
-            + "   Prep " + session.PrepLabel()
             + "   " + (session.MachineBroken ? session.BrokenName + " BROKEN" : "Machines ok");
 
         if (shop)
@@ -143,18 +126,9 @@ public class CafeHud : MonoBehaviour
         shopHint.text = session.Status + "\n" + session.StockAdvice();
         beansLabel.text = "Beans x4  ($" + CafeBalance.BeanPackCost + ")     have " + session.Beans;
         milkLabel.text = "Milk x4  ($" + CafeBalance.MilkPackCost + ")     have " + session.Milk;
-        syrupLabel.text = session.SyrupUnlocked
-            ? "Syrup unlocked"
-            : "Unlock syrup  ($" + CafeBalance.SyrupCost + ")";
         fasterLabel.text = UpgradeButton("Faster brew", "shorter timing, wider green", UpgradeType.FasterBrew);
         patienceLabel.text = UpgradeButton("Longer patience", "cats wait 23s", UpgradeType.LongerPatience);
         rentUpgradeLabel.text = UpgradeButton("Cheaper rent", "dog charges $20", UpgradeType.CheaperRent);
-
-        for (int i = 0; i < pastryLabels.Length; i++)
-            pastryLabels[i].text = "Croissant " + (i + 1) + ": " + session.PastryChoiceLabel(i);
-
-        prepShotLabel.text = session.Prep == PrepType.Espresso ? "Slot: spare shot" : "Spare shot  (1 bean)";
-        prepMilkLabel.text = session.Prep == PrepType.SteamedMilk ? "Slot: steamed milk" : "Steam milk  (1 milk)";
 
         openLabel.text = "Open cafe";
     }
