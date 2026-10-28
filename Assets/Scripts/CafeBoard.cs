@@ -35,11 +35,13 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
+    [SerializeField] GameObject catPrefab;
 
     const float ShopDim = 0.4f;
 
     CafeSession session;
-    CafeHud hud;
+    CafeCat[] cats = System.Array.Empty<CafeCat>();
+    int heldSlot = -1;
     bool built;
     bool dragging;
     bool panning;
@@ -59,11 +61,9 @@ public class CafeBoard : MonoBehaviour
     Sprite placeholderSprite;
     Vector3 placeholderScale;
 
-    public void Attach(CafeSession cafeSession, CafeHud cafeHud = null)
+    public void Attach(CafeSession cafeSession)
     {
         session = cafeSession;
-        if (cafeHud != null)
-            hud = cafeHud;
         if (cam == null)
             cam = Camera.main;
         if (dragToken != null)
@@ -76,9 +76,93 @@ public class CafeBoard : MonoBehaviour
         CacheCircleTimers();
         EnsureStationMarks();
         ResolveBell();
+        SpawnCats();
         CacheBoardColors();
         ClampCamera();
         built = true;
+    }
+
+    public int HeldSlot() => heldSlot;
+
+    void SpawnCats()
+    {
+        if (catPrefab == null)
+            catPrefab = LoadCatPrefab();
+        if (catPrefab == null || session == null)
+            return;
+
+        Transform customers = backdrop != null ? backdrop.Find("Customers") : null;
+        if (customers == null)
+        {
+            GameObject found = GameObject.Find("Customers");
+            if (found != null)
+                customers = found.transform;
+        }
+        if (customers == null)
+            return;
+
+        cats = new CafeCat[session.Slots.Length];
+        for (int i = 0; i < cats.Length; i++)
+        {
+            Transform seat = customers.Find((i + 1).ToString());
+            if (seat == null)
+                continue;
+
+            GameObject instance = Instantiate(catPrefab, seat);
+            instance.name = "Cat " + (i + 1);
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+            CafeCat cat = instance.GetComponent<CafeCat>();
+            if (cat == null)
+                cat = instance.AddComponent<CafeCat>();
+            cat.Slot = i;
+            cats[i] = cat;
+            instance.SetActive(false);
+        }
+    }
+
+    static GameObject LoadCatPrefab()
+    {
+#if UNITY_EDITOR
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Cat 1.prefab");
+#else
+        return null;
+#endif
+    }
+
+    void SyncCats(bool shop)
+    {
+        if (session == null)
+            return;
+
+        bool shift = !shop && session.Phase == DayPhase.Shift;
+        for (int i = 0; i < cats.Length; i++)
+        {
+            if (cats[i] != null)
+                cats[i].Show(session, i, shift);
+        }
+    }
+
+    int CatUnderCursor()
+    {
+        if (cam == null || cats.Length == 0)
+            return -1;
+
+        Vector3 world = cam.ScreenToWorldPoint(PointerScreen());
+        Collider2D[] hits = Physics2D.OverlapPointAll(new Vector2(world.x, world.y));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (hits[i] == null)
+                continue;
+            CafeCat cat = hits[i].GetComponent<CafeCat>();
+            if (cat == null)
+                cat = hits[i].GetComponentInParent<CafeCat>();
+            if (cat != null)
+                return cat.Slot;
+        }
+
+        return -1;
     }
 
     Image grinderFill;
@@ -174,6 +258,7 @@ public class CafeBoard : MonoBehaviour
 
         bool shop = session != null && session.Phase == DayPhase.Shop;
         Pan();
+        heldSlot = !shop && LeftHeld() && !dragging ? CatUnderCursor() : -1;
         if (shop)
         {
             if (dragging)
@@ -185,9 +270,15 @@ public class CafeBoard : MonoBehaviour
                 session.RingBell();
             else
             {
-                CafeHotspot spot = HotspotUnderCursor();
-                if (spot != null)
-                    HandleSpot(spot);
+                int cat = CatUnderCursor();
+                if (cat >= 0)
+                    session.ClickSlot(cat);
+                else
+                {
+                    CafeHotspot spot = HotspotUnderCursor();
+                    if (spot != null)
+                        HandleSpot(spot);
+                }
             }
         }
         else if (dragging && held != null && LeftReleased())
@@ -199,6 +290,7 @@ public class CafeBoard : MonoBehaviour
         ApplyDim(shop);
         SyncStations();
         SyncCircleTimers();
+        SyncCats(shop);
     }
 
     void CacheBoardColors()
@@ -297,6 +389,13 @@ public class CafeBoard : MonoBehaviour
         return Input.GetMouseButtonDown(0);
     }
 
+    static bool LeftHeld()
+    {
+        if (Mouse.current != null && Mouse.current.leftButton.isPressed)
+            return true;
+        return Input.GetMouseButton(0);
+    }
+
     static bool LeftReleased()
     {
         if (Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame)
@@ -326,6 +425,8 @@ public class CafeBoard : MonoBehaviour
             if (hit == null || hit.GetComponentInParent<Graphic>() == null)
                 continue;
             if (hit.GetComponentInParent<CafeHotspot>() != null)
+                continue;
+            if (hit.GetComponentInParent<CafeCat>() != null)
                 continue;
             return true;
         }
@@ -405,7 +506,7 @@ public class CafeBoard : MonoBehaviour
             return;
 
         dragging = false;
-        int customer = hud != null ? hud.SlotUnderPointer() : -1;
+        int customer = CatUnderCursor();
         CafeHotspot target = PointerOverUi() ? null : HotspotUnderCursor();
         if (dragToken != null)
         {

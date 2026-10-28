@@ -1,10 +1,7 @@
 using System;
-using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 public class CafeHud : MonoBehaviour
@@ -60,61 +57,10 @@ public class CafeHud : MonoBehaviour
     [SerializeField] GameObject summaryRoot;
     [SerializeField] TextMeshProUGUI summaryBody;
 
-    [SerializeField] SlotView[] slotViews = { new SlotView(), new SlotView() };
-
     public bool RepairHeld => repairHold != null && repairHold.Held;
 
-    HoldButton[] slotHolds;
     TextMeshProUGUI dogCaption;
     bool dogLifted;
-
-    readonly List<RaycastResult> slotHits = new List<RaycastResult>();
-
-    public int SlotUnderPointer()
-    {
-        if (EventSystem.current == null)
-            return -1;
-
-        PointerEventData data = new PointerEventData(EventSystem.current);
-        if (Mouse.current != null)
-            data.position = Mouse.current.position.ReadValue();
-        else
-            data.position = Input.mousePosition;
-
-        slotHits.Clear();
-        EventSystem.current.RaycastAll(data, slotHits);
-        for (int h = 0; h < slotHits.Count; h++)
-        {
-            GameObject hit = slotHits[h].gameObject;
-            if (hit == null)
-                continue;
-
-            for (int i = 0; i < slotViews.Length; i++)
-            {
-                GameObject root = slotViews[i].Root;
-                if (root == null)
-                    continue;
-                if (hit == root || hit.transform.IsChildOf(root.transform))
-                    return i;
-            }
-        }
-
-        return -1;
-    }
-
-    public int HeldSlot()
-    {
-        if (slotHolds == null)
-            return -1;
-
-        for (int i = 0; i < slotHolds.Length; i++)
-        {
-            if (slotHolds[i] != null && slotHolds[i].Held)
-                return i;
-        }
-
-        return -1;
-    }
 
     public void Bind(CafeSession cafeSession)
     {
@@ -140,25 +86,6 @@ public class CafeHud : MonoBehaviour
         Wire(closeButton, session.Continue);
         Wire(playAgainButton, session.Begin);
         PrepareStationForDrag();
-        slotHolds = new HoldButton[slotViews.Length];
-        for (int i = 0; i < slotViews.Length; i++)
-        {
-            int slot = i;
-            Button button = slotViews[i].Root != null ? slotViews[i].Root.GetComponent<Button>() : null;
-            Wire(button, () => session.ClickSlot(slot));
-            if (button != null)
-            {
-                slotHolds[i] = button.GetComponent<HoldButton>();
-                if (slotHolds[i] == null)
-                    slotHolds[i] = button.gameObject.AddComponent<HoldButton>();
-            }
-            if (slotViews[i].Name != null)
-            {
-                slotViews[i].Name.enableWordWrapping = true;
-                slotViews[i].Name.overflowMode = TextOverflowModes.Overflow;
-            }
-        }
-
         Refresh();
     }
 
@@ -209,8 +136,6 @@ public class CafeHud : MonoBehaviour
                 : "";
 
         RefreshDog();
-        for (int i = 0; i < slotViews.Length; i++)
-            RefreshSlot(i, shift);
     }
 
     void RefreshShop()
@@ -311,55 +236,6 @@ public class CafeHud : MonoBehaviour
         repairCaption.text = "Hold to repair";
     }
 
-    void RefreshSlot(int index, bool shift)
-    {
-        SlotView view = slotViews[index];
-        Customer cat = session.Slots[index];
-        bool show = shift && cat.Occupied;
-        view.Root.SetActive(show);
-        if (!show)
-            return;
-
-        view.Bubble.text = session.OrderBubble(cat);
-        if (cat.IsThief)
-        {
-            view.Name.text = "Hold";
-            view.Name.color = new Color(0.98f, 0.95f, 0.88f);
-            view.PatienceRoot.SetActive(true);
-            float held = Mathf.Clamp01(cat.ThiefHold / CafeBalance.ThiefHoldSeconds);
-            view.PatienceFill.fillAmount = held;
-            view.PatienceFill.color = Color.Lerp(new Color(0.75f, 0.22f, 0.16f), new Color(0.36f, 0.70f, 0.32f), held);
-            view.Body.color = new Color(0.16f, 0.14f, 0.22f);
-            if (view.EarLeft != null)
-                view.EarLeft.color = new Color(0.10f, 0.09f, 0.14f);
-            if (view.EarRight != null && view.EarLeft != null)
-                view.EarRight.color = view.EarLeft.color;
-            return;
-        }
-
-        if (!cat.Accepted)
-            view.Name.text = "Click to take";
-        else if (cat.WantedPastry != PastryType.None)
-            view.Name.text = "Drag croissant here";
-        else if (session.Focus == index && cat.DrinkReady)
-            view.Name.text = "Drag cup here";
-        else
-            view.Name.text = DrinkRecipes.Get(cat.Drink).Steps;
-        view.Name.color = new Color(0.24f, 0.14f, 0.10f);
-        view.PatienceRoot.SetActive(cat.Accepted);
-        if (cat.Accepted && cat.PatienceMax > 0f)
-        {
-            float ratio = Mathf.Clamp01(cat.Patience / cat.PatienceMax);
-            view.PatienceFill.fillAmount = ratio;
-            view.PatienceFill.color = Color.Lerp(new Color(0.75f, 0.22f, 0.16f), new Color(0.36f, 0.70f, 0.32f), ratio);
-        }
-
-        Color body = CatColor(cat.Kind);
-        if (session.Focus == index)
-            body = Color.Lerp(body, Color.white, 0.38f);
-        view.Body.color = body;
-    }
-
     void RefreshClose()
     {
         string thiefLine = "";
@@ -439,17 +315,6 @@ public class CafeHud : MonoBehaviour
         if (session.Upgrade != UpgradeType.None)
             return title;
         return title + "  ($" + CafeBalance.UpgradeCost + ")\n" + detail;
-    }
-
-    static Color CatColor(CustomerKind kind)
-    {
-        if (kind == CustomerKind.Milk)
-            return new Color(0.93f, 0.86f, 0.74f);
-        if (kind == CustomerKind.Sweet)
-            return new Color(0.90f, 0.48f, 0.62f);
-        if (kind == CustomerKind.Thief)
-            return new Color(0.16f, 0.14f, 0.22f);
-        return new Color(0.86f, 0.52f, 0.22f);
     }
 
     [Serializable]

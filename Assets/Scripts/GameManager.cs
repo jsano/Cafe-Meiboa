@@ -13,7 +13,7 @@ public class GameManager : MonoBehaviour
         session.Begin();
         hud.Bind(session);
         if (board != null)
-            board.Attach(session, hud);
+            board.Attach(session);
     }
 
     void Update()
@@ -21,7 +21,7 @@ public class GameManager : MonoBehaviour
         if (session.Phase == DayPhase.Shift)
         {
             session.SetRepairHeld(hud.RepairHeld);
-            session.SetSlotHeld(hud.HeldSlot());
+            session.SetSlotHeld(board != null ? board.HeldSlot() : -1);
             session.Tick(Time.deltaTime);
         }
         else
