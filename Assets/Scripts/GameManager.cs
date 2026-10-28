@@ -10,7 +10,7 @@ public class GameManager : MonoBehaviour
     void Start()
     {
         session = new CafeSession();
-        session.Begin();
+        session.Begin(CafeSession.PendingEndless);
         hud.Bind(session);
         if (board != null)
             board.Attach(session);

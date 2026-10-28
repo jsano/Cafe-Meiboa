@@ -97,6 +97,7 @@ public class CafeHud : MonoBehaviour
         leftNote.gameObject.SetActive(!shift);
 
         hudText.text = "Day " + session.Day
+            + (session.Endless ? "   Health " + session.Health : "")
             + "   $" + session.Cash
             + "   Beans " + session.Beans
             + "   Coffee " + session.CoffeeUses
@@ -239,11 +240,12 @@ public class CafeHud : MonoBehaviour
             + "Earned $" + session.ShiftEarned + "\n"
             + "Tips $" + session.ShiftTips + "\n"
             + "Walkouts " + session.ShiftWalkouts
+            + (session.Endless ? "\nHealth " + session.Health : "")
             + thiefLine + dogLine + "\n\n"
             + "Beans " + session.Beans + "     Milk " + session.Milk + "\n"
             + session.PastryStockLabel() + "\n\n"
             + session.QuestLabel();
-        closeButtonLabel.text = session.Day >= 3 ? "See the summary" : "Back to the shop";
+        closeButtonLabel.text = session.Endless || session.Day < 3 ? "Back to the shop" : "See the summary";
     }
 
     void PrepareStationForDrag()
@@ -267,6 +269,15 @@ public class CafeHud : MonoBehaviour
 
     string SummaryText()
     {
+        if (session.Endless)
+        {
+            return "Health ran out on day " + session.Day + ".\n\n"
+                + "Cash $" + session.Cash + "\n"
+                + "Tips $" + session.RunTips + "\n"
+                + "Walkouts " + session.RunWalkouts + "\n"
+                + "Upgrade: " + session.UpgradeLabel();
+        }
+
         string quest = session.QuestComplete ? "Cleared" : "Not cleared";
         string rent = session.RentKept ? "Yes" : "No";
         return "Three days done.\n\n"

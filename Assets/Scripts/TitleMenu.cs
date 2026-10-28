@@ -19,8 +19,8 @@ public class TitleMenu : MonoBehaviour
             backButton.onClick.AddListener(() => AboutVisible(false));
         if (casualButton != null)
             casualButton.onClick.AddListener(NewGame);
-        //if (endlessButton != null)
-          //  endlessButton.onClick.AddListener(StartEndless); 
+        if (endlessButton != null)
+            endlessButton.onClick.AddListener(StartEndless);
         if (quitButton != null)
             quitButton.onClick.AddListener(QuitGame);
     }
@@ -32,6 +32,13 @@ public class TitleMenu : MonoBehaviour
 
     public void NewGame()
     {
+        CafeSession.PendingEndless = false;
+        SceneManager.LoadScene("Game");
+    }
+
+    public void StartEndless()
+    {
+        CafeSession.PendingEndless = true;
         SceneManager.LoadScene("Game");
     }
 

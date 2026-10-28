@@ -41,7 +41,11 @@ public class QueuedOrder
 
 public class CafeSession
 {
+    public static bool PendingEndless;
+
     public DayPhase Phase = DayPhase.Shop;
+    public bool Endless;
+    public int Health;
     public int Day = 1;
     public int Cash = CafeBalance.StartingCash;
     public int Beans;
@@ -101,7 +105,9 @@ public class CafeSession
 
     public int RentDue => RentAt(RentLevel);
 
-    public int DrinksToday => Day == 1 ? 4 : Day == 2 ? 6 : 8;
+    public int DrinksToday => Endless
+        ? Mathf.Max(0, CafeBalance.BaseCustomers + (Day - 1) * CafeBalance.CustomerStep)
+        : Day == 1 ? 4 : Day == 2 ? 6 : 8;
 
     public float GreenHalfWidth => CafeBalance.GreenHalf;
 
@@ -150,8 +156,10 @@ public class CafeSession
         }
     }
 
-    public void Begin()
+    public void Begin(bool endless)
     {
+        Endless = endless;
+        Health = CafeBalance.EndlessHealth;
         Day = 1;
         Cash = CafeBalance.StartingCash;
         Beans = 0;
@@ -214,6 +222,9 @@ public class CafeSession
         TickMachines(dt);
         TickTiming(dt);
         TickCustomers(dt);
+        if (Phase != DayPhase.Shift)
+            return;
+
         TickDog(dt);
 
         if (ShiftWorkDone() && dogResolved)
@@ -298,9 +309,9 @@ public class CafeSession
         if (type == UpgradeType.FasterBrew)
             return Mathf.Approximately(MachineScale(level), MachineScale(level + 1));
         if (type == UpgradeType.LongerPatience)
-            return Mathf.Approximately(PatienceAt(level), PatienceAt(level + 1));
+            return Mathf.Approximately(PatienceUpgrade(level), PatienceUpgrade(level + 1));
         if (type == UpgradeType.CheaperRent)
-            return RentAt(level) == RentAt(level + 1);
+            return RentUpgrade(level) == RentUpgrade(level + 1);
         return true;
     }
 
@@ -375,12 +386,14 @@ public class CafeSession
         DogPaidThisShift = false;
         heldSlot = -1;
         repairHeld = false;
-        if (Day == 3)
+        if (Day >= 3)
         {
             BrokenTarget = DayBreakTargets[UnityEngine.Random.Range(0, DayBreakTargets.Length)];
             dogResolved = false;
             dogDelay = UnityEngine.Random.Range(CafeBalance.DogDelayMin, CafeBalance.DogDelayMax);
-            Status = "Ring the bell for a customer. The " + BrokenName + " may break, and the dog may visit.";
+            Status = Endless
+                ? "Ring the bell for a customer. The dog wants $" + RentDue + "."
+                : "Ring the bell for a customer. The " + BrokenName + " may break, and the dog may visit.";
         }
         else
         {
@@ -956,7 +969,7 @@ public class CafeSession
         if (Phase != DayPhase.CloseOfDay)
             return;
 
-        if (Day >= 3)
+        if (!Endless && Day >= 3)
         {
             PayQuestBonus();
             Phase = DayPhase.Summary;
@@ -1079,6 +1092,14 @@ public class CafeSession
     public string StockAdvice()
     {
         string text = "This shift is " + DrinksToday + " drinks. You have " + Beans + " beans and " + Milk + " milk.";
+        if (Endless)
+        {
+            text += "\nPatience " + Mathf.RoundToInt(MaxPatience()) + "s"
+                + "   machines " + Seconds(GrindDuration)
+                + "   toast " + Seconds(ToastDuration)
+                + "   rent $" + RentDue
+                + "   health " + Health;
+        }
         return text;
     }
 
@@ -1167,6 +1188,12 @@ public class CafeSession
 
     string ShopIntro()
     {
+        if (Endless)
+        {
+            if (Day == 1)
+                return "Night before day 1. Buy beans, then open when you want.";
+            return "Night before day " + Day + ". More cats, slower machines, less patience, higher rent.";
+        }
         if (Day == 1)
             return "Night before day 1. Buy beans, then open when you want.";
         if (Day == 2)
@@ -1317,6 +1344,9 @@ public class CafeSession
     {
         for (int i = 0; i < Slots.Length; i++)
         {
+            if (Phase != DayPhase.Shift)
+                return;
+
             Customer cat = Slots[i];
             if (!cat.Occupied)
                 continue;
@@ -1486,14 +1516,36 @@ public class CafeSession
         }
 
         if (!QuestComplete)
-        {
             CleanServes = 0;
-            Status = "Walkout. Quest progress reset.";
-        }
-        else
+
+        if (Endless)
         {
-            Status = "Walkout.";
+            Health--;
+            if (Health < 0)
+                Health = 0;
+            if (Health == 0)
+            {
+                Status = "Walkout. No health left.";
+                EndRun();
+                return;
+            }
+
+            Status = "Walkout. Health " + Health + ".";
+            return;
         }
+
+        Status = QuestComplete ? "Walkout." : "Walkout. Quest progress reset.";
+    }
+
+    void EndRun()
+    {
+        Focus = -1;
+        ResetBrew();
+        ClearStation();
+        repairHeld = false;
+        DogPresent = false;
+        heldSlot = -1;
+        Phase = DayPhase.Summary;
     }
 
     void DismissThief(int index)
@@ -2055,9 +2107,12 @@ public class CafeSession
         return MachineSeconds(seconds, BrewLevel);
     }
 
-    static float MachineSeconds(float seconds, int level)
+    float MachineSeconds(float seconds, int level)
     {
-        return seconds * MachineScale(level);
+        float time = seconds * MachineScale(level);
+        if (Endless)
+            time += (Day - 1) * CafeBalance.MachineDayStep;
+        return Mathf.Max(0f, time);
     }
 
     static float MachineScale(int level)
@@ -2073,15 +2128,33 @@ public class CafeSession
         return text + "s";
     }
 
-    static float PatienceAt(int level)
+    float PatienceUpgrade(int level)
     {
-        return Mathf.Min(CafeBalance.PatienceSeconds + CafeBalance.PatienceStep * level, CafeBalance.PatienceMax);
+        return Mathf.Min(
+            CafeBalance.PatienceSeconds + CafeBalance.PatienceStep * level,
+            CafeBalance.PatienceMax);
     }
 
-    static int RentAt(int level)
+    float PatienceAt(int level)
+    {
+        float patience = PatienceUpgrade(level);
+        if (Endless)
+            patience -= (Day - 1) * CafeBalance.PatienceDayStep;
+        return Mathf.Max(0f, patience);
+    }
+
+    int RentUpgrade(int level)
     {
         int cost = CafeBalance.RentCost - CafeBalance.RentStep * level;
         return cost < CafeBalance.RentMin ? CafeBalance.RentMin : cost;
+    }
+
+    int RentAt(int level)
+    {
+        int cost = RentUpgrade(level);
+        if (Endless)
+            cost += (Day - 1) * CafeBalance.RentDayStep;
+        return cost < 0 ? 0 : cost;
     }
 
     static int BasePay(DrinkType drink)

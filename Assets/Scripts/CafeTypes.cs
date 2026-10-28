@@ -395,6 +395,7 @@ public static class CafeBalance
     public const int RentCost = 30;
     public const int RentStep = 5;
     public const int RentMin = 10;
+    public const int RentDayStep = 5;
     public const int QuestBonus = 15;
     public const int QuestGoal = 5;
     public const int ThiefSteal = 12;
@@ -402,6 +403,7 @@ public static class CafeBalance
     public const float PatienceSeconds = 23f;
     public const float PatienceStep = 3f;
     public const float PatienceMax = 35f;
+    public const float PatienceDayStep = 2f;
     public const float ThiefWindow = 5f;
     public const float ThiefHoldSeconds = 3f;
     public const float DogWindow = 8f;
@@ -412,6 +414,10 @@ public static class CafeBalance
     public const float GreenHalf = 0.11f;
     public const float MachineTimeStep = 0.10f;
     public const float MachineTimeMin = 0.60f;
+    public const float MachineDayStep = 0.5f;
+    public const int BaseCustomers = 4;
+    public const int CustomerStep = 2;
+    public const int EndlessHealth = 5;
     public const float GrindSeconds = 4f;
     public const float EspressoSeconds = 4f;
     public const float CoffeeSeconds = 4f;
