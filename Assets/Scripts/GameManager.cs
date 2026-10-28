@@ -21,6 +21,7 @@ public class GameManager : MonoBehaviour
         if (session.Phase == DayPhase.Shift)
         {
             session.SetRepairHeld(hud.RepairHeld);
+            session.SetSlotHeld(hud.HeldSlot());
             session.Tick(Time.deltaTime);
         }
         else

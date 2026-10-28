@@ -14,6 +14,7 @@ public class Customer
     public float PatienceMax;
     public bool DrinkReady;
     public float ThiefTime;
+    public float ThiefHold;
 
     public void Clear()
     {
@@ -27,6 +28,7 @@ public class Customer
         PatienceMax = 0f;
         DrinkReady = false;
         ThiefTime = 0f;
+        ThiefHold = 0f;
     }
 }
 
@@ -45,13 +47,18 @@ public class CafeSession
     public int Beans;
     public int Milk;
     public bool SyrupUnlocked;
-    public bool HasMechanic;
     public UpgradeType Upgrade = UpgradeType.None;
     public PrepType Prep = PrepType.None;
-    public bool RentPaid;
-    public bool RentSkipped;
+    public bool DogPresent;
+    public float DogTime;
+    public bool DogVisited;
+    public bool DogPaidThisShift;
+    public bool RentKept = true;
 
+    public BreakStation BrokenTarget;
     public bool MachineBroken;
+
+    public string BrokenName => StationName(BrokenTarget);
     public float Repair01;
     public bool BrewTiming;
     public float Marker01;
@@ -84,11 +91,13 @@ public class CafeSession
 
     int markerDir = 1;
     int customersSpawned;
-    int brewsStarted;
+    int stationUses;
     bool dayBreakUsed;
     bool thiefInserted;
+    bool dogResolved = true;
+    float dogDelay;
+    int heldSlot = -1;
     bool repairHeld;
-    float mechanicTimer;
 
     public int RentDue => Upgrade == UpgradeType.CheaperRent ? CafeBalance.CheapRentCost : CafeBalance.RentCost;
 
@@ -143,11 +152,16 @@ public class CafeSession
         Beans = 0;
         Milk = 0;
         SyrupUnlocked = false;
-        HasMechanic = false;
         Upgrade = UpgradeType.None;
         Prep = PrepType.None;
-        RentPaid = false;
-        RentSkipped = false;
+        DogPresent = false;
+        DogTime = 0f;
+        DogVisited = false;
+        DogPaidThisShift = false;
+        RentKept = true;
+        dogResolved = true;
+        dogDelay = 0f;
+        heldSlot = -1;
         MachineBroken = false;
         Repair01 = 0f;
         BrewTiming = false;
@@ -167,12 +181,12 @@ public class CafeSession
         QuestComplete = false;
         QuestRewarded = false;
         CleanServes = 0;
-        brewsStarted = 0;
+        BrokenTarget = BreakStation.None;
+        stationUses = 0;
         customersSpawned = 0;
         dayBreakUsed = false;
         thiefInserted = false;
         repairHeld = false;
-        mechanicTimer = 0f;
         markerDir = 1;
         queue.Clear();
         timingScores.Clear();
@@ -195,12 +209,15 @@ public class CafeSession
         TickMachines(dt);
         TickTiming(dt);
         TickCustomers(dt);
+        TickDog(dt);
 
-        if (OccupiedCount() == 0 && queue.Count == 0 && !(Day == 2 && !thiefInserted))
+        if (ShiftWorkDone() && dogResolved)
             EndShift();
     }
 
     public void SetRepairHeld(bool held) => repairHeld = held;
+
+    public void SetSlotHeld(int index) => heldSlot = index;
 
     public void BuyBeans()
     {
@@ -250,26 +267,6 @@ public class CafeSession
         Cash -= CafeBalance.SyrupCost;
         SyrupUnlocked = true;
         Status = "Syrup unlocked. Sweet tooths arrive on day 3.";
-    }
-
-    public void HireMechanic()
-    {
-        if (Phase != DayPhase.Shop)
-            return;
-        if (HasMechanic)
-        {
-            Status = "The mechanic is already hired.";
-            return;
-        }
-        if (Cash < CafeBalance.MechanicCost)
-        {
-            Status = "Not enough cash to hire the mechanic.";
-            return;
-        }
-
-        Cash -= CafeBalance.MechanicCost;
-        HasMechanic = true;
-        Status = "Mechanic hired. The next breakdown repairs itself.";
     }
 
     public void BuyUpgrade(UpgradeType type)
@@ -351,26 +348,25 @@ public class CafeSession
 
     public void PayRent()
     {
-        if (Phase != DayPhase.Shop || Day != 3 || RentPaid)
+        if (Phase != DayPhase.Shift || !DogPresent)
             return;
         if (Cash < RentDue)
         {
-            Status = "Not enough cash for the dog. Open anyway and the brewer starts broken.";
+            Status = "Not enough cash for the dog.";
             return;
         }
 
         Cash -= RentDue;
-        RentPaid = true;
-        Status = "Rent paid. The dog leaves the machines alone.";
+        DogPresent = false;
+        dogResolved = true;
+        DogPaidThisShift = true;
+        Status = "Rent paid. The dog leaves.";
     }
 
     public void OpenCafe()
     {
         if (Phase != DayPhase.Shop)
             return;
-
-        if (Day == 3 && !RentPaid)
-            RentSkipped = true;
 
         int[] baked = new int[PastryStock.Length];
         for (int i = 0; i < PastryStock.Length; i++)
@@ -392,9 +388,8 @@ public class CafeSession
         ResetBrew();
         MachineBroken = false;
         Repair01 = 0f;
-        mechanicTimer = 0f;
         dayBreakUsed = false;
-        brewsStarted = 0;
+        stationUses = 0;
         customersSpawned = 0;
         thiefInserted = false;
         ShiftEarned = 0;
@@ -403,27 +398,27 @@ public class CafeSession
         ThiefLostThisShift = 0;
         ThiefAppeared = false;
         ThiefCaught = false;
+        DogPresent = false;
+        DogTime = 0f;
+        DogVisited = false;
+        DogPaidThisShift = false;
+        heldSlot = -1;
         repairHeld = false;
-
-        if (Day == 3 && RentSkipped)
+        if (Day == 3)
         {
-            MachineBroken = true;
-            dayBreakUsed = true;
-            Status = "The dog broke the brewer. Repair it, then ring the bell for a customer.";
-        }
-        else if (Day == 1)
-        {
-            Status = "Ring the bell for a customer. Build their drink on a tray, then drag the cup to them.";
-        }
-        else if (Day == 2)
-        {
-            Status = "Ring the bell for a customer. The brewer can break, and a thief may grab the till.";
+            BrokenTarget = DayBreakTargets[UnityEngine.Random.Range(0, DayBreakTargets.Length)];
+            dogResolved = false;
+            dogDelay = UnityEngine.Random.Range(CafeBalance.DogDelayMin, CafeBalance.DogDelayMax);
+            Status = "Ring the bell for a customer. The " + BrokenName + " may break, and the dog may visit.";
         }
         else
         {
-            Status = SyrupUnlocked
-                ? "Ring the bell for a customer. Sweet tooths want syrup coffee."
-                : "Ring the bell for a customer. Syrup is locked, so no sweet tooths.";
+            BrokenTarget = BreakStation.None;
+            dogResolved = true;
+            dogDelay = 0f;
+            Status = Day == 1
+                ? "Ring the bell for a customer. Build their drink on a tray, then drag the cup to them."
+                : "Ring the bell for a customer. A thief may grab the till.";
         }
 
         ClearStation();
@@ -481,13 +476,14 @@ public class CafeSession
             Status = "Take the shot first.";
             return;
         }
-        if (RefuseBrokenBrewer())
+        if (RefuseBroken(BreakStation.CoffeePuck) || RefuseBroken(BreakStation.Espresso))
             return;
 
         PuckReady = false;
         EspressoBusy = true;
         EspressoTimer = CafeBalance.EspressoSeconds;
-        brewsStarted++;
+        NoteStationUse(BreakStation.CoffeePuck);
+        NoteStationUse(BreakStation.Espresso);
         Status = "Pulling a shot.";
     }
 
@@ -500,12 +496,12 @@ public class CafeSession
         }
         if (CoffeeBusy || CoffeeUses > 0)
             return;
-        if (RefuseBrokenBrewer())
+        if (RefuseBroken(BreakStation.Coffee))
             return;
 
         CoffeeBusy = true;
         CoffeeTimer = CafeBalance.CoffeeSeconds;
-        brewsStarted++;
+        NoteStationUse(BreakStation.Coffee);
         Status = "Brewing coffee.";
     }
 
@@ -724,8 +720,11 @@ public class CafeSession
             Status = "That cup already has ice.";
             return;
         }
+        if (RefuseBroken(BreakStation.Ice))
+            return;
 
         Trays[tray].Ice = true;
+        NoteStationUse(BreakStation.Ice);
         Status = "Ice added.";
         TryFinishDrink();
     }
@@ -907,8 +906,11 @@ public class CafeSession
                 : "The toaster is running.";
             return;
         }
+        if (RefuseBroken(BreakStation.Toaster))
+            return;
 
         ToasterBusy = true;
+        NoteStationUse(BreakStation.Toaster);
         ToasterTimer = CafeBalance.ToastSeconds;
         toasting = type;
         Status = "Toasting a " + PastryName(type).ToLower() + " croissant.";
@@ -965,10 +967,7 @@ public class CafeSession
 
         if (cat.IsThief)
         {
-            cat.Clear();
-            thiefInserted = true;
-            ThiefCaught = true;
-            Status = "You caught the thief.";
+            Status = "Hold the thief.";
             return;
         }
 
@@ -1023,9 +1022,7 @@ public class CafeSession
         }
         if (MachineBroken)
         {
-            Status = HasMechanic
-                ? "The mechanic is repairing the brewer."
-                : "Hold Repair until the brewer is fixed.";
+            Status = "Hold Repair until the " + BrokenName + " is fixed.";
             return;
         }
 
@@ -1124,7 +1121,7 @@ public class CafeSession
     public string OrderBubble(Customer cat)
     {
         if (cat.IsThief)
-            return "THIEF\nClick!";
+            return "THIEF\nHold!";
 
         if (cat.WantedPastry != PastryType.None)
             return PastryName(cat.WantedPastry) + " croissant";
@@ -1177,8 +1174,8 @@ public class CafeSession
         if (Day == 1)
             return "Night before day 1. Buy beans, then open when you want.";
         if (Day == 2)
-            return "Night before day 2. Milk unlocks lattes. The brewer may break.";
-        return "Night before day 3. The black dog is here for rent.";
+            return "Night before day 2. Any drink can be ordered. A thief may grab the till.";
+        return "Night before day 3. A dog may visit, and a machine may break.";
     }
 
     void BuildQueue()
@@ -1192,8 +1189,7 @@ public class CafeSession
             CustomerKind kind = CustomerKind.Regular;
             if (pastry == PastryType.None)
             {
-                DrinkType[] menu = (DrinkType[])Enum.GetValues(typeof(DrinkType));
-                drink = menu[((Day - 1) * DrinksToday + i) % menu.Length];
+                drink = DrinkFor(i);
                 kind = DrinkRecipes.Get(drink).Kind;
             }
 
@@ -1232,21 +1228,6 @@ public class CafeSession
         if (!MachineBroken)
         {
             Repair01 = 0f;
-            mechanicTimer = 0f;
-            return;
-        }
-
-        if (HasMechanic)
-        {
-            mechanicTimer += dt;
-            Repair01 = mechanicTimer / CafeBalance.MechanicRepairSeconds;
-            if (mechanicTimer >= CafeBalance.MechanicRepairSeconds)
-            {
-                MachineBroken = false;
-                Repair01 = 0f;
-                mechanicTimer = 0f;
-                Status = "The mechanic repaired the brewer.";
-            }
             return;
         }
 
@@ -1257,7 +1238,7 @@ public class CafeSession
             {
                 MachineBroken = false;
                 Repair01 = 0f;
-                Status = "Brewer repaired.";
+                Status = "The " + BrokenName + " is repaired.";
             }
         }
         else
@@ -1350,6 +1331,17 @@ public class CafeSession
 
             if (cat.IsThief)
             {
+                if (heldSlot == i)
+                    cat.ThiefHold += dt;
+                else
+                    cat.ThiefHold = 0f;
+
+                if (cat.ThiefHold >= CafeBalance.ThiefHoldSeconds)
+                {
+                    DismissThief(i);
+                    continue;
+                }
+
                 cat.ThiefTime -= dt;
                 if (cat.ThiefTime <= 0f)
                     ThiefEscapes(i);
@@ -1408,7 +1400,7 @@ public class CafeSession
             thief.ThiefTime = CafeBalance.ThiefWindow;
             thiefInserted = true;
             ThiefAppeared = true;
-            Status = "A thief is at the counter. Click them.";
+            Status = "A thief is at the counter. Hold them.";
             return;
         }
 
@@ -1512,6 +1504,14 @@ public class CafeSession
         }
     }
 
+    void DismissThief(int index)
+    {
+        Slots[index].Clear();
+        thiefInserted = true;
+        ThiefCaught = true;
+        Status = "The thief gives up.";
+    }
+
     void ThiefEscapes(int index)
     {
         int lost = CafeBalance.ThiefSteal;
@@ -1533,17 +1533,100 @@ public class CafeSession
         ResetBrew();
         ClearStation();
         repairHeld = false;
+        DogPresent = false;
+        heldSlot = -1;
         Status = "Day " + Day + " is closed.";
     }
 
-    bool ShouldBreak()
+    bool ShiftWorkDone()
     {
-        if (dayBreakUsed || Day == 1)
+        if (OccupiedCount() > 0 || queue.Count > 0)
             return false;
-        if (Day == 3 && RentSkipped)
-            return false;
-        return brewsStarted == 1;
+        return Day != 2 || thiefInserted;
     }
+
+    void TickDog(float dt)
+    {
+        if (dogResolved)
+            return;
+
+        if (!DogPresent)
+        {
+            dogDelay -= dt;
+            if (dogDelay <= 0f || ShiftWorkDone())
+                ArriveDog();
+            return;
+        }
+
+        DogTime -= dt;
+        if (DogTime <= 0f)
+            DismissDogUnpaid();
+    }
+
+    void ArriveDog()
+    {
+        DogPresent = true;
+        DogTime = CafeBalance.DogWindow;
+        DogVisited = true;
+        Status = "The black dog is here. Pay $" + RentDue + ".";
+    }
+
+    void DismissDogUnpaid()
+    {
+        DogPresent = false;
+        dogResolved = true;
+        DogPaidThisShift = false;
+        RentKept = false;
+        if (MachineBroken)
+            Status = "The dog left. The " + BrokenName + " is still broken.";
+        else if (!dayBreakUsed && BrokenTarget != BreakStation.None)
+            BreakMachine("The dog broke the " + BrokenName + ".");
+        else
+            Status = "The dog left.";
+    }
+
+    DrinkType DrinkFor(int index)
+    {
+        if (Day == 1)
+        {
+            DrinkType[] shortMenu = DrinkRecipes.AtMostSteps(4);
+            return shortMenu[index % shortMenu.Length];
+        }
+
+        DrinkType[] menu = (DrinkType[])Enum.GetValues(typeof(DrinkType));
+        return menu[((Day - 1) * DrinksToday + index) % menu.Length];
+    }
+
+    bool RefuseBroken(BreakStation station)
+    {
+        if (BrokenTarget != station)
+            return false;
+        if (MachineBroken)
+        {
+            Status = "Hold Repair until the " + StationName(station) + " is fixed.";
+            return true;
+        }
+        if (dayBreakUsed || stationUses != 1)
+            return false;
+
+        BreakMachine("The " + StationName(station) + " broke.");
+        return true;
+    }
+
+    void NoteStationUse(BreakStation station)
+    {
+        if (BrokenTarget == station && !dayBreakUsed && !MachineBroken)
+            stationUses++;
+    }
+
+    static readonly BreakStation[] DayBreakTargets =
+    {
+        BreakStation.CoffeePuck,
+        BreakStation.Coffee,
+        BreakStation.Toaster,
+        BreakStation.Ice,
+        BreakStation.Espresso
+    };
 
     void ResetBrew()
     {
@@ -1585,23 +1668,28 @@ public class CafeSession
             Trays[i].Clear();
     }
 
-    bool RefuseBrokenBrewer()
+    void BreakMachine(string status)
     {
-        if (MachineBroken)
-        {
-            Status = HasMechanic
-                ? "The mechanic is repairing the brewer."
-                : "Hold Repair until the brewer is fixed.";
-            return true;
-        }
-        if (!ShouldBreak())
-            return false;
-
         MachineBroken = true;
         dayBreakUsed = true;
-        mechanicTimer = 0f;
-        Status = "The brewer broke.";
-        return true;
+        Repair01 = 0f;
+        BrewTiming = false;
+        Status = status;
+    }
+
+    static string StationName(BreakStation station)
+    {
+        if (station == BreakStation.CoffeePuck)
+            return "coffee puck";
+        if (station == BreakStation.Coffee)
+            return "coffee machine";
+        if (station == BreakStation.Toaster)
+            return "toaster";
+        if (station == BreakStation.Ice)
+            return "ice";
+        if (station == BreakStation.Espresso)
+            return "espresso machine";
+        return "machine";
     }
 
     bool PourShotInto(TrayCup cup)

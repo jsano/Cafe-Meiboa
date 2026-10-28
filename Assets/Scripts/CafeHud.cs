@@ -18,7 +18,6 @@ public class CafeHud : MonoBehaviour
     [SerializeField] TextMeshProUGUI beansLabel;
     [SerializeField] TextMeshProUGUI milkLabel;
     [SerializeField] TextMeshProUGUI syrupLabel;
-    [SerializeField] TextMeshProUGUI mechanicLabel;
     [SerializeField] TextMeshProUGUI fasterLabel;
     [SerializeField] TextMeshProUGUI patienceLabel;
     [SerializeField] TextMeshProUGUI rentUpgradeLabel;
@@ -33,7 +32,6 @@ public class CafeHud : MonoBehaviour
     [SerializeField] Button beansButton;
     [SerializeField] Button milkButton;
     [SerializeField] Button syrupButton;
-    [SerializeField] Button mechanicButton;
     [SerializeField] Button fasterButton;
     [SerializeField] Button patienceButton;
     [SerializeField] Button rentUpgradeButton;
@@ -65,6 +63,10 @@ public class CafeHud : MonoBehaviour
     [SerializeField] SlotView[] slotViews = { new SlotView(), new SlotView() };
 
     public bool RepairHeld => repairHold != null && repairHold.Held;
+
+    HoldButton[] slotHolds;
+    TextMeshProUGUI dogCaption;
+    bool dogLifted;
 
     readonly List<RaycastResult> slotHits = new List<RaycastResult>();
 
@@ -100,13 +102,26 @@ public class CafeHud : MonoBehaviour
         return -1;
     }
 
+    public int HeldSlot()
+    {
+        if (slotHolds == null)
+            return -1;
+
+        for (int i = 0; i < slotHolds.Length; i++)
+        {
+            if (slotHolds[i] != null && slotHolds[i].Held)
+                return i;
+        }
+
+        return -1;
+    }
+
     public void Bind(CafeSession cafeSession)
     {
         session = cafeSession;
         Wire(beansButton, session.BuyBeans);
         Wire(milkButton, session.BuyMilk);
         Wire(syrupButton, session.BuySyrup);
-        Wire(mechanicButton, session.HireMechanic);
         Wire(fasterButton, () => session.BuyUpgrade(UpgradeType.FasterBrew));
         Wire(patienceButton, () => session.BuyUpgrade(UpgradeType.LongerPatience));
         Wire(rentUpgradeButton, () => session.BuyUpgrade(UpgradeType.CheaperRent));
@@ -120,15 +135,23 @@ public class CafeHud : MonoBehaviour
         Wire(prepMilkButton, session.PrepMilk);
         Wire(payButton, session.PayRent);
         Wire(openButton, session.OpenCafe);
+        LiftDogPrompt();
         Wire(actionButton, session.PressStation);
         Wire(closeButton, session.Continue);
         Wire(playAgainButton, session.Begin);
         PrepareStationForDrag();
+        slotHolds = new HoldButton[slotViews.Length];
         for (int i = 0; i < slotViews.Length; i++)
         {
             int slot = i;
             Button button = slotViews[i].Root != null ? slotViews[i].Root.GetComponent<Button>() : null;
             Wire(button, () => session.ClickSlot(slot));
+            if (button != null)
+            {
+                slotHolds[i] = button.GetComponent<HoldButton>();
+                if (slotHolds[i] == null)
+                    slotHolds[i] = button.gameObject.AddComponent<HoldButton>();
+            }
             if (slotViews[i].Name != null)
             {
                 slotViews[i].Name.enableWordWrapping = true;
@@ -169,7 +192,7 @@ public class CafeHud : MonoBehaviour
             + "   Pastry " + session.PastryCount
             + "   " + session.QuestLabel()
             + "   Prep " + session.PrepLabel()
-            + "   " + (session.MachineBroken ? "Brewer BROKEN" : "Brewer ok");
+            + "   " + (session.MachineBroken ? session.BrokenName + " BROKEN" : "Machines ok");
 
         if (shop)
             RefreshShop();
@@ -185,6 +208,7 @@ public class CafeHud : MonoBehaviour
                 ? "The counter is closed.\nStock the right side, then open when you are ready."
                 : "";
 
+        RefreshDog();
         for (int i = 0; i < slotViews.Length; i++)
             RefreshSlot(i, shift);
     }
@@ -197,9 +221,6 @@ public class CafeHud : MonoBehaviour
         syrupLabel.text = session.SyrupUnlocked
             ? "Syrup unlocked"
             : "Unlock syrup  ($" + CafeBalance.SyrupCost + ")";
-        mechanicLabel.text = session.HasMechanic
-            ? "Mechanic hired"
-            : "Hire mechanic  ($" + CafeBalance.MechanicCost + ")";
         fasterLabel.text = UpgradeButton("Faster brew", "shorter timing, wider green", UpgradeType.FasterBrew);
         patienceLabel.text = UpgradeButton("Longer patience", "cats wait 23s", UpgradeType.LongerPatience);
         rentUpgradeLabel.text = UpgradeButton("Cheaper rent", "dog charges $20", UpgradeType.CheaperRent);
@@ -210,16 +231,56 @@ public class CafeHud : MonoBehaviour
         prepShotLabel.text = session.Prep == PrepType.Espresso ? "Slot: spare shot" : "Spare shot  (1 bean)";
         prepMilkLabel.text = session.Prep == PrepType.SteamedMilk ? "Slot: steamed milk" : "Steam milk  (1 milk)";
 
-        dogRow.SetActive(session.Day == 3);
-        payButton.gameObject.SetActive(session.Day == 3);
-        payLabel.text = session.RentPaid
-            ? "Rent paid"
-            : "Pay the black dog  ($" + session.RentDue + ")";
+        openLabel.text = "Open cafe";
+    }
 
-        if (session.Day == 3 && !session.RentPaid)
-            openLabel.text = "Open anyway";
-        else
-            openLabel.text = "Open cafe";
+    void RefreshDog()
+    {
+        bool show = session.Phase == DayPhase.Shift && session.DogPresent;
+        if (dogRow != null)
+            dogRow.SetActive(show);
+        if (payButton != null)
+            payButton.gameObject.SetActive(show);
+        if (!show)
+            return;
+
+        int seconds = Mathf.CeilToInt(Mathf.Max(0f, session.DogTime));
+        if (dogCaption != null)
+            dogCaption.text = "Black dog. Pay or the " + session.BrokenName + " breaks.\n" + seconds + "s left.";
+        if (payLabel != null)
+            payLabel.text = "Pay the black dog  ($" + session.RentDue + ")";
+    }
+
+    void LiftDogPrompt()
+    {
+        if (dogLifted || dogRow == null || payButton == null || shopRoot == null)
+            return;
+
+        RectTransform parent = shopRoot.transform.parent as RectTransform;
+        if (parent == null)
+            return;
+
+        dogCaption = dogRow.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (dogCaption != null)
+            dogCaption.enableWordWrapping = true;
+        PlacePrompt(dogRow.GetComponent<RectTransform>(), parent, 0.02f, 0.52f, 0.22f, 0.72f);
+        PlacePrompt(payButton.GetComponent<RectTransform>(), parent, 0.02f, 0.40f, 0.22f, 0.51f);
+        dogRow.SetActive(false);
+        payButton.gameObject.SetActive(false);
+        dogLifted = true;
+    }
+
+    static void PlacePrompt(RectTransform rect, RectTransform parent, float xMin, float yMin, float xMax, float yMax)
+    {
+        if (rect == null)
+            return;
+
+        rect.SetParent(parent, false);
+        rect.anchorMin = new Vector2(xMin, yMin);
+        rect.anchorMax = new Vector2(xMax, yMax);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        rect.SetAsLastSibling();
     }
 
     void RefreshShift()
@@ -247,7 +308,7 @@ public class CafeHud : MonoBehaviour
         bool showRepair = session.MachineBroken;
         repairRoot.SetActive(showRepair);
         repairFill.fillAmount = Mathf.Clamp01(session.Repair01);
-        repairCaption.text = session.HasMechanic ? "Mechanic repairing" : "Hold to repair";
+        repairCaption.text = "Hold to repair";
     }
 
     void RefreshSlot(int index, bool shift)
@@ -262,12 +323,17 @@ public class CafeHud : MonoBehaviour
         view.Bubble.text = session.OrderBubble(cat);
         if (cat.IsThief)
         {
-            view.Name.text = "Click now";
+            view.Name.text = "Hold";
             view.Name.color = new Color(0.98f, 0.95f, 0.88f);
-            view.PatienceRoot.SetActive(false);
+            view.PatienceRoot.SetActive(true);
+            float held = Mathf.Clamp01(cat.ThiefHold / CafeBalance.ThiefHoldSeconds);
+            view.PatienceFill.fillAmount = held;
+            view.PatienceFill.color = Color.Lerp(new Color(0.75f, 0.22f, 0.16f), new Color(0.36f, 0.70f, 0.32f), held);
             view.Body.color = new Color(0.16f, 0.14f, 0.22f);
-            view.EarLeft.color = new Color(0.10f, 0.09f, 0.14f);
-            view.EarRight.color = view.EarLeft.color;
+            if (view.EarLeft != null)
+                view.EarLeft.color = new Color(0.10f, 0.09f, 0.14f);
+            if (view.EarRight != null && view.EarLeft != null)
+                view.EarRight.color = view.EarLeft.color;
             return;
         }
 
@@ -300,15 +366,23 @@ public class CafeHud : MonoBehaviour
         if (session.Day == 2 && session.ThiefAppeared)
         {
             thiefLine = session.ThiefCaught
-                ? "\nYou caught the thief."
+                ? "\nThe thief gave up."
                 : "\nThief took $" + session.ThiefLostThisShift;
+        }
+
+        string dogLine = "";
+        if (session.DogVisited)
+        {
+            dogLine = session.DogPaidThisShift
+                ? "\nYou paid the dog."
+                : "\nThe dog left unpaid.";
         }
 
         closeBody.text = "Day " + session.Day + " closed\n\n"
             + "Earned $" + session.ShiftEarned + "\n"
             + "Tips $" + session.ShiftTips + "\n"
             + "Walkouts " + session.ShiftWalkouts
-            + thiefLine + "\n\n"
+            + thiefLine + dogLine + "\n\n"
             + "Beans " + session.Beans + "     Milk " + session.Milk + "\n"
             + session.PastryStockLabel() + "\n\n"
             + session.QuestLabel();
@@ -337,7 +411,7 @@ public class CafeHud : MonoBehaviour
     string SummaryText()
     {
         string quest = session.QuestComplete ? "Cleared" : "Not cleared";
-        string rent = session.RentPaid ? "Yes" : "No";
+        string rent = session.RentKept ? "Yes" : "No";
         return "Three days done.\n\n"
             + "Cash $" + session.Cash + "\n"
             + "Tips $" + session.RunTips + "\n"
@@ -350,7 +424,7 @@ public class CafeHud : MonoBehaviour
     string ActionLabel()
     {
         if (session.MachineBroken)
-            return session.HasMechanic ? "Mechanic is repairing" : "Brewer broken";
+            return session.BrokenName + " broken";
         if (session.BrewTiming)
             return "Stop";
         if (session.FocusReady)

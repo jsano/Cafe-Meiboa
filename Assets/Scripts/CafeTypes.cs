@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 public enum DayPhase
 {
@@ -71,6 +72,16 @@ public enum UpgradeType
     FasterBrew,
     LongerPatience,
     CheaperRent
+}
+
+public enum BreakStation
+{
+    None,
+    CoffeePuck,
+    Coffee,
+    Toaster,
+    Ice,
+    Espresso
 }
 
 public enum PrepType
@@ -228,6 +239,29 @@ public struct DrinkRecipe
             return CafeBalance.CoffeePay;
         }
     }
+
+    public int StepCount
+    {
+        get
+        {
+            int count = 1;
+            count += BitCount((int)(Parts & ~(CupBits.Hot | CupBits.Cold)));
+            count += BitCount((int)Syrups);
+            count += BitCount((int)Teas);
+            return count;
+        }
+    }
+
+    static int BitCount(int value)
+    {
+        int count = 0;
+        while (value != 0)
+        {
+            count += value & 1;
+            value >>= 1;
+        }
+        return count;
+    }
 }
 
 public static class DrinkRecipes
@@ -241,6 +275,27 @@ public static class DrinkRecipes
     {
         return Get(drink).Matches(cup);
     }
+
+    public static DrinkType[] AtMostSteps(int steps)
+    {
+        if (shortMenu != null && shortMenuSteps == steps)
+            return shortMenu;
+
+        DrinkType[] menu = (DrinkType[])Enum.GetValues(typeof(DrinkType));
+        var fits = new List<DrinkType>();
+        for (int i = 0; i < menu.Length; i++)
+        {
+            if (Get(menu[i]).StepCount <= steps)
+                fits.Add(menu[i]);
+        }
+
+        shortMenuSteps = steps;
+        shortMenu = fits.ToArray();
+        return shortMenu;
+    }
+
+    static DrinkType[] shortMenu;
+    static int shortMenuSteps = -1;
 
     static DrinkRecipe Make(string name, CupBits parts, SyrupBits syrups = SyrupBits.None, TeaBits teas = TeaBits.None)
     {
@@ -342,7 +397,6 @@ public static class CafeBalance
     public const int MilkPackCost = 8;
     public const int MilkPackSize = 4;
     public const int SyrupCost = 15;
-    public const int MechanicCost = 20;
     public const int UpgradeCost = 25;
     public const int RentCost = 30;
     public const int CheapRentCost = 20;
@@ -353,8 +407,11 @@ public static class CafeBalance
     public const float PatienceSeconds = 16f;
     public const float LongPatienceSeconds = 23f;
     public const float ThiefWindow = 4f;
+    public const float ThiefHoldSeconds = 3f;
+    public const float DogWindow = 8f;
+    public const float DogDelayMin = 6f;
+    public const float DogDelayMax = 32f;
     public const float RepairHoldSeconds = 1.6f;
-    public const float MechanicRepairSeconds = 0.8f;
     public const float MarkerSpeed = 0.62f;
     public const float FastMarkerSpeed = 0.95f;
     public const float GreenHalf = 0.11f;
