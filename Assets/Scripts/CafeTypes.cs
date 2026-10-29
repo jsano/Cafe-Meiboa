@@ -47,7 +47,9 @@ public enum DrinkType
     IcedWhiteTeaLatte,
     IcedBlackTeaLatte,
     VanillaMatchaLatte,
-    IcedCaramelMatcha
+    IcedCaramelMatcha,
+    AlmondMatchaLatte,
+    IcedChocolateMatcha
 }
 
 public enum PastryType
@@ -371,7 +373,9 @@ public static class DrinkRecipes
         Make("Iced white tea latte", CupBits.Cold | CupBits.Ice | CupBits.Milk | CupBits.Straw, teas: TeaBits.White),
         Make("Iced black tea latte", CupBits.Cold | CupBits.Ice | CupBits.Milk | CupBits.Straw, teas: TeaBits.Black),
         Make("Vanilla matcha latte", CupBits.Hot | CupBits.Steamed, SyrupBits.Vanilla, TeaBits.Matcha),
-        Make("Iced caramel matcha", CupBits.Cold | CupBits.Milk | CupBits.Ice | CupBits.Straw, SyrupBits.Caramel, TeaBits.Matcha)
+        Make("Iced caramel matcha", CupBits.Cold | CupBits.Milk | CupBits.Ice | CupBits.Straw, SyrupBits.Caramel, TeaBits.Matcha),
+        Make("Almond matcha latte", CupBits.Hot | CupBits.Steamed, SyrupBits.Almond, TeaBits.Matcha),
+        Make("Iced chocolate matcha", CupBits.Cold | CupBits.Ice | CupBits.Milk | CupBits.Straw, SyrupBits.Chocolate, TeaBits.Matcha)
     };
 }
 
@@ -422,5 +426,7 @@ public static class CafeBalance
     public const float EspressoSeconds = 4f;
     public const float CoffeeSeconds = 4f;
     public const int CoffeeBatch = 4;
+    public const float IceSeconds = 8f;
+    public const int IceBatch = 4;
     public const float ToastSeconds = 10f;
 }

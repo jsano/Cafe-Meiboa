@@ -99,10 +99,6 @@ public class CafeHud : MonoBehaviour
         hudText.text = "Day " + session.Day
             + (session.Endless ? "   Health " + session.Health : "")
             + "   $" + session.Cash
-            + "   Beans " + session.Beans
-            + "   Coffee " + session.CoffeeUses
-            + "   Milk " + session.Milk
-            + "   Pastry " + session.PastryCount
             + "   " + session.QuestLabel()
             + "   " + (session.MachineBroken ? session.BrokenName + " BROKEN" : "Machines ok");
 

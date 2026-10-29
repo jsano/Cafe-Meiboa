@@ -49,7 +49,9 @@ public class CafeSession
     public int Day = 1;
     public int Cash = CafeBalance.StartingCash;
     public int Beans;
+    public int BeanTotal;
     public int Milk;
+    public int MilkTotal;
     public int BrewLevel;
     public int PatienceLevel;
     public int RentLevel;
@@ -114,6 +116,7 @@ public class CafeSession
     public float GrindDuration => MachineSeconds(CafeBalance.GrindSeconds);
     public float EspressoDuration => MachineSeconds(CafeBalance.EspressoSeconds);
     public float CoffeeDuration => MachineSeconds(CafeBalance.CoffeeSeconds);
+    public float IceDuration => MachineSeconds(CafeBalance.IceSeconds);
     public float ToastDuration => MachineSeconds(CafeBalance.ToastSeconds);
 
     public bool CanOpen => true;
@@ -132,6 +135,9 @@ public class CafeSession
     public bool CoffeeBusy;
     public float CoffeeTimer;
     public int CoffeeUses;
+    public bool IceBusy;
+    public float IceTimer;
+    public int IceUses;
     public readonly TrayCup WaterCup = new TrayCup();
     public int SteamedServings;
     public int ActiveTray = -1;
@@ -163,7 +169,9 @@ public class CafeSession
         Day = 1;
         Cash = CafeBalance.StartingCash;
         Beans = 0;
+        BeanTotal = 0;
         Milk = 0;
+        MilkTotal = 0;
         BrewLevel = 0;
         PatienceLevel = 0;
         RentLevel = 0;
@@ -247,6 +255,7 @@ public class CafeSession
 
         Cash -= CafeBalance.BeanPackCost;
         Beans += CafeBalance.BeanPackSize;
+        BeanTotal += CafeBalance.BeanPackSize;
         Status = "Bought 4 beans.";
     }
 
@@ -262,6 +271,7 @@ public class CafeSession
 
         Cash -= CafeBalance.MilkPackCost;
         Milk += CafeBalance.MilkPackSize;
+        MilkTotal += CafeBalance.MilkPackSize;
         Status = "Bought 4 milk. Lattes can show up from day 2.";
     }
 
@@ -489,6 +499,24 @@ public class CafeSession
         Status = "Brewing coffee.";
     }
 
+    public void StartIce()
+    {
+        if (Phase != DayPhase.Shift)
+        {
+            Status = "Open the cafe first.";
+            return;
+        }
+        if (IceBusy || IceUses > 0)
+            return;
+        if (RefuseBroken(BreakStation.Ice))
+            return;
+
+        IceBusy = true;
+        IceTimer = IceDuration;
+        NoteStationUse(BreakStation.Ice);
+        Status = "Making ice.";
+    }
+
     public void PourShot(int tray)
     {
         if (!CupReady(tray))
@@ -710,12 +738,22 @@ public class CafeSession
             Status = "That cup already has ice.";
             return;
         }
-        if (RefuseBroken(BreakStation.Ice))
+        if (IceBusy || IceUses <= 0)
+        {
+            Status = "Make ice first.";
             return;
+        }
+        if (MachineBroken && BrokenTarget == BreakStation.Ice)
+        {
+            Status = "Hold Repair until the ice is fixed.";
+            return;
+        }
 
         Trays[tray].Ice = true;
-        NoteStationUse(BreakStation.Ice);
-        Status = "Ice added.";
+        IceUses--;
+        Status = IceUses > 0
+            ? "Ice added. " + IceUses + " left."
+            : "Ice added. Click the ice machine to make more.";
         TryFinishDrink();
     }
 
@@ -1105,34 +1143,11 @@ public class CafeSession
 
     public string StepsLabel()
     {
-        string machines = MachineLine();
         if (FocusReady)
-            return "Drag the cup to the cat.  " + machines;
+            return "Drag the cup to the cat.";
         if (BrewTiming)
-            return "Stop in the green.  " + machines;
-        return machines;
-    }
-
-    string MachineLine()
-    {
-        string grind = GrinderBusy
-            ? "Grinding"
-            : (PuckReady ? "Puck ready" : "Grind idle");
-        string shot = EspressoBusy
-            ? "Pulling"
-            : "Shots " + EspressoShots;
-        string coffee = CoffeeBusy
-            ? "Brewing"
-            : "Pot x" + CoffeeUses;
-        string line = grind + "   " + shot + "   " + coffee;
-        if (ToasterBusy)
-            line += "   Toasting";
-        else if (ToasterReady != PastryType.None)
-            line += "   Toast ready";
-        if (Plated != PastryType.None)
-            line += "   Plate full";
-        line += "   Steamed " + SteamedServings;
-        return line;
+            return "Stop in the green.";
+        return "";
     }
 
     public string OrderBubble(Customer cat)
@@ -1317,6 +1332,18 @@ public class CafeSession
                 CoffeeTimer = 0f;
                 CoffeeUses = CafeBalance.CoffeeBatch;
                 Status = "Coffee is ready. Four pours.";
+            }
+        }
+
+        if (IceBusy)
+        {
+            IceTimer -= dt;
+            if (IceTimer <= 0f)
+            {
+                IceBusy = false;
+                IceTimer = 0f;
+                IceUses = CafeBalance.IceBatch;
+                Status = "Ice is ready. Four uses.";
             }
         }
     }
@@ -1704,6 +1731,9 @@ public class CafeSession
         CoffeeBusy = false;
         CoffeeTimer = 0f;
         CoffeeUses = 0;
+        IceBusy = false;
+        IceTimer = 0f;
+        IceUses = 0;
         WaterCup.Clear();
         waterCupWasActive = false;
         for (int i = 0; i < Trays.Length; i++)

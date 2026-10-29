@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -74,6 +75,7 @@ public class CafeBoard : MonoBehaviour
         }
         WireHotspots();
         CacheCircleTimers();
+        CacheCounters();
         EnsureStationMarks();
         ResolveBell();
         SpawnCats();
@@ -168,7 +170,12 @@ public class CafeBoard : MonoBehaviour
     Image grinderFill;
     Image espressoFill;
     Image coffeeFill;
+    Image iceFill;
     Image toasterFill;
+    TextMeshProUGUI beanCount;
+    TextMeshProUGUI coffeeCount;
+    TextMeshProUGUI iceCount;
+    TextMeshProUGUI milkCount;
 
     void CacheCircleTimers()
     {
@@ -188,6 +195,8 @@ public class CafeBoard : MonoBehaviour
                 espressoFill = fill;
             else if (hotspot.Spot == CafeSpot.Coffee)
                 coffeeFill = fill;
+            else if (hotspot.Spot == CafeSpot.Ice)
+                iceFill = fill;
             else if (hotspot.Spot == CafeSpot.Toaster)
                 toasterFill = fill;
         }
@@ -218,6 +227,7 @@ public class CafeBoard : MonoBehaviour
         SetFill(grinderFill, session.GrinderBusy, session.GrinderTimer, session.GrindDuration);
         SetFill(espressoFill, session.EspressoBusy, session.EspressoTimer, session.EspressoDuration);
         SetFill(coffeeFill, session.CoffeeBusy, session.CoffeeTimer, session.CoffeeDuration);
+        SetFill(iceFill, session.IceBusy, session.IceTimer, session.IceDuration);
         SetFill(toasterFill, session.ToasterBusy, session.ToasterTimer, session.ToastDuration);
     }
 
@@ -228,6 +238,65 @@ public class CafeBoard : MonoBehaviour
 
         float progress = duration > 0f ? 1f - remaining / duration : 1f;
         image.fillAmount = busy ? Mathf.Clamp01(progress) : 0f;
+    }
+
+    void CacheCounters()
+    {
+        CafeHotspot[] spots = FindObjectsByType<CafeHotspot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < spots.Length; i++)
+        {
+            CafeHotspot hotspot = spots[i];
+            if (hotspot == null)
+                continue;
+
+            TextMeshProUGUI label = CounterLabel(hotspot.transform);
+            if (label == null)
+                continue;
+            if (hotspot.Spot == CafeSpot.Beans)
+                beanCount = label;
+            else if (hotspot.Spot == CafeSpot.Coffee)
+                coffeeCount = label;
+            else if (hotspot.Spot == CafeSpot.Ice)
+                iceCount = label;
+            else if (hotspot.Spot == CafeSpot.Milk)
+                milkCount = label;
+        }
+    }
+
+    static TextMeshProUGUI CounterLabel(Transform root)
+    {
+        Transform[] all = root.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i].name != "Counter")
+                continue;
+
+            TextMeshProUGUI label = all[i].GetComponentInChildren<TextMeshProUGUI>(true);
+            if (label != null)
+                label.raycastTarget = false;
+            return label;
+        }
+
+        return null;
+    }
+
+    void SyncCounters()
+    {
+        if (session == null)
+            return;
+
+        SetCount(beanCount, session.Beans, session.BeanTotal);
+        SetCount(coffeeCount, session.CoffeeUses, CafeBalance.CoffeeBatch);
+        SetCount(iceCount, session.IceUses, CafeBalance.IceBatch);
+        SetCount(milkCount, session.Milk, session.MilkTotal);
+    }
+
+    static void SetCount(TextMeshProUGUI label, int remaining, int total)
+    {
+        if (label == null)
+            return;
+
+        label.text = remaining + " / " + total;
     }
 
     void WireHotspots()
@@ -289,6 +358,7 @@ public class CafeBoard : MonoBehaviour
         SyncCups();
         ApplyDim(shop);
         SyncStations();
+        SyncCounters();
         SyncCircleTimers();
         SyncCats(shop);
     }
@@ -458,6 +528,8 @@ public class CafeBoard : MonoBehaviour
             return session.ToasterBusy;
         if (spot == CafeSpot.Coffee)
             return session.CoffeeBusy;
+        if (spot == CafeSpot.Ice)
+            return session.IceBusy;
         return false;
     }
 
@@ -469,6 +541,8 @@ public class CafeBoard : MonoBehaviour
             return session == null || !session.WaterCup.Occupied;
         if (spot.Spot == CafeSpot.Coffee)
             return session == null || session.CoffeeUses <= 0;
+        if (spot.Spot == CafeSpot.Ice)
+            return session == null || session.IceUses <= 0;
         return false;
     }
 
@@ -482,6 +556,8 @@ public class CafeBoard : MonoBehaviour
             session.FillWaterCup(false);
         else if (spot.Spot == CafeSpot.Coffee)
             session.StartCoffee();
+        else if (spot.Spot == CafeSpot.Ice)
+            session.StartIce();
     }
 
     public void Press(CafeHotspot spot)
@@ -624,6 +700,8 @@ public class CafeBoard : MonoBehaviour
             return session.SteamedServings > 0;
         if (spot.Spot == CafeSpot.Coffee)
             return session.CoffeeUses > 0 && !session.CoffeeBusy;
+        if (spot.Spot == CafeSpot.Ice)
+            return session.IceUses > 0 && !session.IceBusy;
         if (spot.Spot == CafeSpot.CoffeePuck)
             return session.PuckReady;
         if (spot.Spot == CafeSpot.Espresso)
@@ -868,7 +946,7 @@ public class CafeBoard : MonoBehaviour
             return whiteTeaSprite;
         if (spot.Spot == CafeSpot.Milk || spot.Spot == CafeSpot.SteamedMilk)
             return milkSprite;
-        if (spot.Spot == CafeSpot.Ice)
+        if (spot.Spot == CafeSpot.Ice && session.IceUses > 0)
             return iceSprite;
         if (spot.Spot == CafeSpot.CoffeePuck)
             return puckSprite;
