@@ -67,6 +67,9 @@ public class CafeSession
     public string BrokenName => StationName(BrokenTarget);
     public float Repair01;
     public bool BrewTiming;
+    public bool VerticalTiming;
+    public bool SyrupTiming;
+    public float SyrupLeft;
     public float Marker01;
     public int Focus = -1;
     public bool BrewLocked;
@@ -144,6 +147,7 @@ public class CafeSession
     public readonly TrayCup[] Trays = { new TrayCup(), new TrayCup(), new TrayCup() };
 
     bool brewScored;
+    bool pourOnWater;
     bool waterCupWasActive;
     PastryType toasting;
 
@@ -186,6 +190,9 @@ public class CafeSession
         MachineBroken = false;
         Repair01 = 0f;
         BrewTiming = false;
+        VerticalTiming = false;
+        SyrupTiming = false;
+        SyrupLeft = 0f;
         Marker01 = 0f;
         Focus = -1;
         BrewLocked = false;
@@ -601,8 +608,20 @@ public class CafeSession
             return;
         }
 
-        WaterCup.Water = hot ? 1 : 2;
-        Status = (hot ? "Hot" : "Cold") + " water added.";
+        int next = hot ? 1 : 2;
+        if (WaterCup.Water == next)
+        {
+            Status = (hot ? "Hot" : "Cold") + " water is already in the cup.";
+            return;
+        }
+        if (BrewTiming)
+        {
+            Status = "Finish the timing first.";
+            return;
+        }
+
+        WaterCup.Water = next;
+        StartPourTiming(true);
     }
 
     public void PlaceWaterCup(int tray)
@@ -664,6 +683,12 @@ public class CafeSession
         if (!WaterCup.Occupied)
             return;
 
+        if (VerticalTiming && pourOnWater)
+        {
+            BrewTiming = false;
+            VerticalTiming = false;
+        }
+
         bool cancel = waterCupWasActive || brewScored || FocusReady;
         WaterCup.Clear();
         waterCupWasActive = false;
@@ -676,6 +701,9 @@ public class CafeSession
         if (Focus >= 0 && Focus < Slots.Length && Slots[Focus].Occupied)
             Slots[Focus].DrinkReady = false;
         BrewTiming = false;
+        VerticalTiming = false;
+        SyrupTiming = false;
+        SyrupLeft = 0f;
         brewScored = false;
         timingScores.Clear();
         FocusReady = false;
@@ -716,12 +744,19 @@ public class CafeSession
             Status = "That cup already has a straw.";
             return;
         }
+        if (BrewTiming)
+        {
+            Status = "Finish the timing first.";
+            return;
+        }
 
         Trays[tray].Straw = true;
-        
+
         ActiveTray = tray;
         BrewLocked = true;
         BrewTiming = true;
+        VerticalTiming = false;
+        SyrupTiming = false;
         brewScored = false;
         Marker01 = 0f;
         markerDir = 1;
@@ -799,10 +834,14 @@ public class CafeSession
             Status = "That cup already has " + SyrupName(syrup) + ".";
             return;
         }
+        if (BrewTiming)
+        {
+            Status = "Finish the timing first.";
+            return;
+        }
 
         Trays[tray].Syrup |= bit;
-        Status = SyrupName(syrup) + " added.";
-        TryFinishDrink();
+        StartSyrupTiming();
     }
 
     public void AddTea(int tray, int tea)
@@ -838,11 +877,15 @@ public class CafeSession
             Status = "Out of milk.";
             return;
         }
+        if (BrewTiming)
+        {
+            Status = "Finish the timing first.";
+            return;
+        }
 
         Milk--;
         Trays[tray].Milk = true;
-        Status = "Milk added.";
-        TryFinishDrink();
+        StartPourTiming(false);
     }
 
     public void AddSteamedMilk(int tray)
@@ -892,6 +935,9 @@ public class CafeSession
         if (Focus >= 0 && Focus < Slots.Length && Slots[Focus].Occupied)
             Slots[Focus].DrinkReady = false;
         BrewTiming = false;
+        VerticalTiming = false;
+        SyrupTiming = false;
+        SyrupLeft = 0f;
         brewScored = false;
         timingScores.Clear();
         FocusReady = false;
@@ -1076,25 +1122,16 @@ public class CafeSession
 
     public void PressStation()
     {
-        if (Phase != DayPhase.Shift)
+        if (Phase != DayPhase.Shift || !BrewTiming)
             return;
-        if (!BrewTiming)
+
+        if (SyrupTiming)
         {
-            Status = "The timer is not running.";
+            Marker01 = Mathf.Min(1f, Marker01 + CafeBalance.SyrupBump);
             return;
         }
 
-        BrewTiming = false;
-        float score = ScoreMarker();
-        timingScores.Add(score);
-        brewScored = true;
-        Status = score > 0f ? "Brew timed." : "Missed the green zone.";
-        if (!TryFinishDrink())
-        {
-            string missing = MissingHint();
-            if (missing.Length > 0)
-                Status = Status + " " + missing;
-        }
+        FinishTiming();
     }
 
     public string QuestLabel()
@@ -1139,15 +1176,6 @@ public class CafeSession
                 + "   health " + Health;
         }
         return text;
-    }
-
-    public string StepsLabel()
-    {
-        if (FocusReady)
-            return "Drag the cup to the cat.";
-        if (BrewTiming)
-            return "Stop in the green.";
-        return "";
     }
 
     public string OrderBubble(Customer cat)
@@ -1353,6 +1381,31 @@ public class CafeSession
         if (!BrewTiming)
             return;
 
+        if (SyrupTiming)
+        {
+            SyrupLeft -= dt;
+            Marker01 -= CafeBalance.SyrupFallSpeed * dt;
+            if (Marker01 < 0f)
+                Marker01 = 0f;
+            if (SyrupLeft <= 0f)
+            {
+                SyrupLeft = 0f;
+                FinishTiming();
+            }
+            return;
+        }
+
+        if (VerticalTiming)
+        {
+            Marker01 += CafeBalance.PourMarkerSpeed * dt;
+            if (Marker01 >= 1f)
+            {
+                Marker01 = 1f;
+                FinishTiming();
+            }
+            return;
+        }
+
         float speed = CafeBalance.MarkerSpeed;
         Marker01 += markerDir * speed * dt;
         if (Marker01 >= 1f)
@@ -1364,6 +1417,54 @@ public class CafeSession
         {
             Marker01 = 0f;
             markerDir = 1;
+        }
+    }
+
+    void StartPourTiming(bool onWater)
+    {
+        pourOnWater = onWater;
+        VerticalTiming = true;
+        SyrupTiming = false;
+        BrewTiming = true;
+        Marker01 = 0f;
+        markerDir = 1;
+        Status = "Stop in the green zone.";
+    }
+
+    void StartSyrupTiming()
+    {
+        SyrupTiming = true;
+        VerticalTiming = false;
+        pourOnWater = false;
+        BrewTiming = true;
+        SyrupLeft = CafeBalance.SyrupSeconds;
+        Marker01 = 0f;
+        Status = "Keep it in the green.";
+    }
+
+    void FinishTiming()
+    {
+        if (!BrewTiming)
+            return;
+
+        bool pour = VerticalTiming;
+        bool syrup = SyrupTiming;
+        BrewTiming = false;
+        VerticalTiming = false;
+        SyrupTiming = false;
+        SyrupLeft = 0f;
+        float score = ScoreMarker();
+        timingScores.Add(score);
+        if (!pour && !syrup)
+            brewScored = true;
+        Status = score > 0f
+            ? (syrup ? "Syrup balanced." : pour ? "Pour timed." : "Brew timed.")
+            : "Missed the green zone.";
+        if (!TryFinishDrink())
+        {
+            string missing = MissingHint();
+            if (missing.Length > 0)
+                Status = Status + " " + missing;
         }
     }
 
@@ -1702,6 +1803,9 @@ public class CafeSession
         BrewLocked = false;
         FocusReady = false;
         BrewTiming = false;
+        VerticalTiming = false;
+        SyrupTiming = false;
+        SyrupLeft = 0f;
         brewScored = false;
         ActiveTray = -1;
         timingScores.Clear();
@@ -1746,6 +1850,9 @@ public class CafeSession
         dayBreakUsed = true;
         Repair01 = 0f;
         BrewTiming = false;
+        VerticalTiming = false;
+        SyrupTiming = false;
+        SyrupLeft = 0f;
         Status = status;
     }
 
@@ -1896,6 +2003,9 @@ public class CafeSession
             return false;
         }
 
+        if (BrewTiming)
+            return false;
+
         bool needsTiming = (DrinkRecipes.Get(cat.Drink).Parts & CupBits.Straw) != 0;
         if (needsTiming && !brewScored)
         {
@@ -1940,6 +2050,11 @@ public class CafeSession
         if (!DrinkRecipes.Matches(Trays[tray], cat.Drink))
         {
             Status = "They don't want that.";
+            return;
+        }
+        if (BrewTiming)
+        {
+            Status = "Stop in the green zone.";
             return;
         }
         if ((DrinkRecipes.Get(cat.Drink).Parts & CupBits.Straw) != 0 && !brewScored)

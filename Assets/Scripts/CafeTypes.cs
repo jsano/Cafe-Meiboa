@@ -415,6 +415,10 @@ public static class CafeBalance
     public const float DogDelayMax = 32f;
     public const float RepairHoldSeconds = 1.6f;
     public const float MarkerSpeed = 0.62f;
+    public const float PourMarkerSpeed = 0.26f;
+    public const float SyrupSeconds = 5f;
+    public const float SyrupFallSpeed = 0.18f;
+    public const float SyrupBump = 0.13f;
     public const float GreenHalf = 0.11f;
     public const float MachineTimeStep = 0.10f;
     public const float MachineTimeMin = 0.60f;
