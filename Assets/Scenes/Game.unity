@@ -10624,6 +10624,15 @@ MonoBehaviour:
   - {fileID: 1660801407}
   bell: {fileID: 1937019415}
   catPrefab: {fileID: 4087002206910300072, guid: b9246dd1bb22f97499232e9b1d63774a, type: 3}
+  customerSprites:
+  - {fileID: -5598374701484220474, guid: bb7acb5ef7fc9d543a9e2a0a65f88fe0, type: 3}
+  - {fileID: 21300000, guid: be4a612cbc3194b4394d22cfa40c0094, type: 3}
+  - {fileID: 21300000, guid: a71cc92a5648f2a4b9656c8c592fffea, type: 3}
+  - {fileID: 21300000, guid: 4117969df5d92e04386d5b2b82bbc1a1, type: 3}
+  - {fileID: 21300000, guid: f514abf11b5149d4d89b89122962b57a, type: 3}
+  - {fileID: -8067994760903668253, guid: f999d79f5ed2e144188b78493398e4a4, type: 3}
+  - {fileID: 21300000, guid: c44a4621966eb80478ec0cf4a5dab7b1, type: 3}
+  thiefSprite: {fileID: 21300000, guid: e74d84dc8887f764bafeb1c73f6b19cc, type: 3}
 --- !u!1 &1837225641
 GameObject:
   m_ObjectHideFlags: 0

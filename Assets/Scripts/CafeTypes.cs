@@ -481,9 +481,9 @@ public static class CafeBalance
     public const int QuestGoal = 5;
     public const int ThiefSteal = 12;
 
-    public const float PatienceSeconds = 3.0f;
+    public const float PatienceSeconds = 30f;
     public const float PatienceStep = 3f;
-    public const float PatienceMax = 4.2f;
+    public const float PatienceMax = 42f;
     public const float PatienceDayStep = 2f;
     public const float ThiefWindow = 5f;
     public const float ThiefHoldSeconds = 3f;

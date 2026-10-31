@@ -37,6 +37,8 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
     [SerializeField] GameObject catPrefab;
+    [SerializeField] Sprite[] customerSprites;
+    [SerializeField] Sprite thiefSprite;
 
     const float ShopDim = 0.4f;
 
@@ -128,7 +130,7 @@ public class CafeBoard : MonoBehaviour
     static GameObject LoadCatPrefab()
     {
 #if UNITY_EDITOR
-        return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Cat 1.prefab");
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Cat.prefab");
 #else
         return null;
 #endif
@@ -143,7 +145,7 @@ public class CafeBoard : MonoBehaviour
         for (int i = 0; i < cats.Length; i++)
         {
             if (cats[i] != null)
-                cats[i].Show(session, i, shift);
+                cats[i].Show(session, i, shift, customerSprites, thiefSprite);
         }
     }
 

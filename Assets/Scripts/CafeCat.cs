@@ -7,16 +7,22 @@ public class CafeCat : MonoBehaviour
     public int Slot;
 
     SpriteRenderer body;
+    SpriteRenderer face;
     TextMeshProUGUI bubble;
     TextMeshProUGUI detail;
     GameObject patienceRoot;
     Image patienceFill;
+    bool seated;
 
     void Awake()
     {
         body = GetComponent<SpriteRenderer>();
         if (body != null)
             body.sortingOrder = 8;
+
+        Transform faceTransform = transform.Find("Face");
+        if (faceTransform != null)
+            face = faceTransform.GetComponent<SpriteRenderer>();
 
         Transform canvas = transform.Find("Canvas");
         if (canvas != null)
@@ -43,17 +49,22 @@ public class CafeCat : MonoBehaviour
         }
     }
 
-    public void Show(CafeSession session, int index, bool shift)
+    public void Show(CafeSession session, int index, bool shift, Sprite[] customerSprites, Sprite thiefSprite)
     {
         Customer cat = session.Slots[index];
         bool visible = shift && cat.Occupied;
         if (!visible)
         {
+            seated = false;
             gameObject.SetActive(false);
             return;
         }
 
+        bool arriving = !seated;
+        seated = true;
         gameObject.SetActive(true);
+        if (arriving)
+            SetFace(cat.IsThief ? thiefSprite : RandomSprite(customerSprites));
         if (bubble != null)
             bubble.text = session.OrderBubble(cat);
 
@@ -105,6 +116,30 @@ public class CafeCat : MonoBehaviour
     {
         if (body != null)
             body.color = color;
+    }
+
+    void SetFace(Sprite sprite)
+    {
+        if (face == null || sprite == null)
+            return;
+        face.sprite = sprite;
+        face.color = Color.white;
+    }
+
+    static Sprite RandomSprite(Sprite[] sprites)
+    {
+        if (sprites == null || sprites.Length == 0)
+            return null;
+
+        int start = Random.Range(0, sprites.Length);
+        for (int n = 0; n < sprites.Length; n++)
+        {
+            Sprite sprite = sprites[(start + n) % sprites.Length];
+            if (sprite != null)
+                return sprite;
+        }
+
+        return null;
     }
 
     static TextMeshProUGUI Label(Transform child)
