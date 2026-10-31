@@ -31,8 +31,8 @@ public enum CafeSpot
     SyrupCoconut,
     SyrupAlmond,
     TeaBlack,
-    TeaGreen,
     TeaMatcha,
+    TeaLavender,
     TeaWhite
 }
 

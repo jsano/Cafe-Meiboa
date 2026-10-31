@@ -24,7 +24,7 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] Sprite coconutSyrupSprite;
     [SerializeField] Sprite almondSyrupSprite;
     [SerializeField] Sprite blackTeaSprite;
-    [SerializeField] Sprite greenTeaSprite;
+    [SerializeField] Sprite lavenderTeaSprite;
     [SerializeField] Sprite matchaTeaSprite;
     [SerializeField] Sprite whiteTeaSprite;
     [SerializeField] Sprite milkSprite;
@@ -33,7 +33,6 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] Sprite beansSprite;
     [SerializeField] Sprite coffeeSprite;
     [SerializeField] Sprite strawSprite;
-    [SerializeField] Sprite tempSprite;
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
@@ -945,8 +944,8 @@ public class CafeBoard : MonoBehaviour
             return almondSyrupSprite;
         if (spot.Spot == CafeSpot.TeaBlack)
             return blackTeaSprite;
-        if (spot.Spot == CafeSpot.TeaGreen)
-            return greenTeaSprite;
+        if (spot.Spot == CafeSpot.TeaLavender)
+            return lavenderTeaSprite;
         if (spot.Spot == CafeSpot.TeaMatcha)
             return matchaTeaSprite;
         if (spot.Spot == CafeSpot.TeaWhite)
@@ -1202,7 +1201,7 @@ public class CafeBoard : MonoBehaviour
     static bool IsTea(CafeSpot spot)
     {
         return spot == CafeSpot.TeaBlack
-            || spot == CafeSpot.TeaGreen
+            || spot == CafeSpot.TeaLavender
             || spot == CafeSpot.TeaMatcha
             || spot == CafeSpot.TeaWhite;
     }
@@ -1211,9 +1210,9 @@ public class CafeBoard : MonoBehaviour
     {
         if (spot == CafeSpot.TeaBlack)
             return 1;
-        if (spot == CafeSpot.TeaGreen)
-            return 2;
         if (spot == CafeSpot.TeaMatcha)
+            return 2;
+        if (spot == CafeSpot.TeaLavender)
             return 3;
         if (spot == CafeSpot.TeaWhite)
             return 4;

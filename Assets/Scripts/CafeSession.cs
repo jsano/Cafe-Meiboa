@@ -8,6 +8,7 @@ public class Customer
     public bool IsThief;
     public CustomerKind Kind;
     public DrinkType Drink;
+    public DrinkRecipe Recipe;
     public PastryType WantedPastry;
     public bool Accepted;
     public float Patience;
@@ -22,6 +23,7 @@ public class Customer
         IsThief = false;
         Kind = CustomerKind.Regular;
         Drink = DrinkType.BlackCoffee;
+        Recipe = default;
         WantedPastry = PastryType.None;
         Accepted = false;
         Patience = 0f;
@@ -30,12 +32,23 @@ public class Customer
         ThiefTime = 0f;
         ThiefHold = 0f;
     }
+
+    public DrinkRecipe OrderRecipe
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(Recipe.Name))
+                return Recipe;
+            return DrinkRecipes.Get(Drink);
+        }
+    }
 }
 
 public class QueuedOrder
 {
     public CustomerKind Kind;
     public DrinkType Drink;
+    public DrinkRecipe Recipe;
     public PastryType Pastry;
 }
 
@@ -103,7 +116,7 @@ public class CafeSession
     bool dayBreakUsed;
     bool thiefInserted;
     bool dogResolved = true;
-    float dogDelay;
+    int dogAfterCustomers;
     int heldSlot = -1;
     bool repairHeld;
 
@@ -146,6 +159,7 @@ public class CafeSession
     public readonly TrayCup[] Trays = { new TrayCup(), new TrayCup(), new TrayCup() };
 
     bool brewScored;
+    bool strawTiming;
     bool pourOnWater;
     bool waterCupWasActive;
     PastryType toasting;
@@ -183,13 +197,14 @@ public class CafeSession
         DogPaidThisShift = false;
         RentKept = true;
         dogResolved = true;
-        dogDelay = 0f;
+        dogAfterCustomers = 0;
         heldSlot = -1;
         MachineBroken = false;
         Repair01 = 0f;
         BrewTiming = false;
         VerticalTiming = false;
         SyrupTiming = false;
+        strawTiming = false;
         SyrupLeft = 0f;
         Marker01 = 0f;
         Focus = -1;
@@ -407,7 +422,8 @@ public class CafeSession
         {
             BrokenTarget = DayBreakTargets[UnityEngine.Random.Range(0, DayBreakTargets.Length)];
             dogResolved = false;
-            dogDelay = UnityEngine.Random.Range(CafeBalance.DogDelayMin, CafeBalance.DogDelayMax);
+            int latest = Mathf.Max(1, DrinksToday - 1);
+            dogAfterCustomers = UnityEngine.Random.Range(1, latest + 1);
             Status = Endless
                 ? "Ring the bell for a customer. The dog wants $" + RentDue + "."
                 : "Ring the bell for a customer. The " + BrokenName + " may break, and the dog may visit.";
@@ -416,7 +432,7 @@ public class CafeSession
         {
             BrokenTarget = BreakStation.None;
             dogResolved = true;
-            dogDelay = 0f;
+            dogAfterCustomers = 0;
             Status = Day == 1
                 ? "Ring the bell for a customer. Build their drink on a tray, then drag the cup to them."
                 : "Ring the bell for a customer. A thief may grab the till.";
@@ -702,6 +718,7 @@ public class CafeSession
         BrewTiming = false;
         VerticalTiming = false;
         SyrupTiming = false;
+        strawTiming = false;
         SyrupLeft = 0f;
         brewScored = false;
         timingScores.Clear();
@@ -756,6 +773,7 @@ public class CafeSession
         BrewTiming = true;
         VerticalTiming = false;
         SyrupTiming = false;
+        strawTiming = true;
         brewScored = false;
         Marker01 = 0f;
         markerDir = 1;
@@ -856,10 +874,14 @@ public class CafeSession
             Status = "That cup already has " + TeaName(tea) + ".";
             return;
         }
+        if (BrewTiming)
+        {
+            Status = "Finish the timing first.";
+            return;
+        }
 
         Trays[tray].Tea |= bit;
-        Status = TeaName(tea) + " added.";
-        TryFinishDrink();
+        StartSlideTiming();
     }
 
     public void AddMilk(int tray)
@@ -936,6 +958,7 @@ public class CafeSession
         BrewTiming = false;
         VerticalTiming = false;
         SyrupTiming = false;
+        strawTiming = false;
         SyrupLeft = 0f;
         brewScored = false;
         timingScores.Clear();
@@ -1186,7 +1209,7 @@ public class CafeSession
 
         if (cat.WantedPastry != PastryType.None)
             return PastryName(cat.WantedPastry) + " croissant";
-        return DrinkName(cat.Drink);
+        return cat.OrderRecipe.Name;
     }
 
     public static string DrinkName(DrinkType drink)
@@ -1262,17 +1285,25 @@ public class CafeSession
         {
             PastryType pastry = pastrySlot[i] ? RandomPastry() : PastryType.None;
             DrinkType drink = DrinkType.BlackCoffee;
+            DrinkRecipe recipe = default;
             CustomerKind kind = CustomerKind.Regular;
             if (pastry == PastryType.None)
             {
-                drink = DrinkFor();
-                kind = DrinkRecipes.Get(drink).Kind;
+                if (Endless && UnityEngine.Random.Range(0, CafeBalance.RandomDrinkRoll) == 0)
+                    recipe = DrinkRecipes.RandomDrink();
+                else
+                {
+                    drink = DrinkFor();
+                    recipe = DrinkRecipes.Get(drink);
+                }
+                kind = recipe.Kind;
             }
 
             queue.Enqueue(new QueuedOrder
             {
                 Kind = kind,
                 Drink = drink,
+                Recipe = recipe,
                 Pastry = pastry
             });
         }
@@ -1425,6 +1456,7 @@ public class CafeSession
         pourOnWater = onWater;
         VerticalTiming = true;
         SyrupTiming = false;
+        strawTiming = false;
         BrewTiming = true;
         Marker01 = 0f;
         markerDir = 1;
@@ -1442,6 +1474,18 @@ public class CafeSession
         Status = "Keep it in the green.";
     }
 
+    void StartSlideTiming()
+    {
+        strawTiming = false;
+        VerticalTiming = false;
+        SyrupTiming = false;
+        pourOnWater = false;
+        BrewTiming = true;
+        Marker01 = 0f;
+        markerDir = 1;
+        Status = "Stop in the green zone.";
+    }
+
     void FinishTiming()
     {
         if (!BrewTiming)
@@ -1449,16 +1493,18 @@ public class CafeSession
 
         bool pour = VerticalTiming;
         bool syrup = SyrupTiming;
+        bool straw = strawTiming;
         BrewTiming = false;
         VerticalTiming = false;
         SyrupTiming = false;
+        strawTiming = false;
         SyrupLeft = 0f;
         float score = ScoreMarker();
         timingScores.Add(score);
-        if (!pour && !syrup)
+        if (straw)
             brewScored = true;
         Status = score > 0f
-            ? (syrup ? "Syrup balanced." : pour ? "Pour timed." : "Brew timed.")
+            ? (syrup ? "Syrup balanced." : pour ? "Pour timed." : straw ? "Brew timed." : "Tea timed.")
             : "Missed the green zone.";
         if (!TryFinishDrink())
         {
@@ -1563,6 +1609,7 @@ public class CafeSession
         cat.Occupied = true;
         cat.Kind = order.Kind;
         cat.Drink = order.Drink;
+        cat.Recipe = order.Recipe;
         cat.WantedPastry = order.Pastry;
         customersSpawned++;
     }
@@ -1581,7 +1628,7 @@ public class CafeSession
         Customer cat = Slots[index];
         TipGrade grade = ComputeGrade(cat);
         int tip = grade == TipGrade.Perfect ? CafeBalance.TipPerfect : grade == TipGrade.Okay ? CafeBalance.TipOkay : 0;
-        int basePay = BasePay(cat.Drink);
+        int basePay = cat.OrderRecipe.Pay;
         int total = basePay + tip;
         Cash += total;
         ShiftEarned += total;
@@ -1597,7 +1644,7 @@ public class CafeSession
         }
 
         string tipName = grade == TipGrade.Perfect ? "perfect" : grade == TipGrade.Okay ? "okay" : "none";
-        Status = DrinkName(cat.Drink) + " " + basePay + " + tip " + tip + " (" + tipName + ").";
+        Status = cat.OrderRecipe.Name + " " + basePay + " + tip " + tip + " (" + tipName + ").";
         ClearServedCup();
         cat.Clear();
         if (Focus == index)
@@ -1723,8 +1770,7 @@ public class CafeSession
 
         if (!DogPresent)
         {
-            dogDelay -= dt;
-            if (dogDelay <= 0f || ShiftWorkDone())
+            if (customersSpawned >= dogAfterCustomers)
                 ArriveDog();
             return;
         }
@@ -1804,6 +1850,7 @@ public class CafeSession
         BrewTiming = false;
         VerticalTiming = false;
         SyrupTiming = false;
+        strawTiming = false;
         SyrupLeft = 0f;
         brewScored = false;
         ActiveTray = -1;
@@ -1851,6 +1898,7 @@ public class CafeSession
         BrewTiming = false;
         VerticalTiming = false;
         SyrupTiming = false;
+        strawTiming = false;
         SyrupLeft = 0f;
         Status = status;
     }
@@ -1988,7 +2036,7 @@ public class CafeSession
         int tray = -1;
         for (int i = 0; i < Trays.Length; i++)
         {
-            if (!DrinkRecipes.Matches(Trays[i], cat.Drink))
+            if (!cat.OrderRecipe.Matches(Trays[i]))
                 continue;
             tray = i;
             break;
@@ -2005,7 +2053,7 @@ public class CafeSession
         if (BrewTiming)
             return false;
 
-        bool needsTiming = (DrinkRecipes.Get(cat.Drink).Parts & CupBits.Straw) != 0;
+        bool needsTiming = (cat.OrderRecipe.Parts & CupBits.Straw) != 0;
         if (needsTiming && !brewScored)
         {
             cat.DrinkReady = false;
@@ -2046,7 +2094,7 @@ public class CafeSession
             Status = "They don't want a drink.";
             return;
         }
-        if (!DrinkRecipes.Matches(Trays[tray], cat.Drink))
+        if (!cat.OrderRecipe.Matches(Trays[tray]))
         {
             Status = "They don't want that.";
             return;
@@ -2056,7 +2104,7 @@ public class CafeSession
             Status = "Stop in the green zone.";
             return;
         }
-        if ((DrinkRecipes.Get(cat.Drink).Parts & CupBits.Straw) != 0 && !brewScored)
+        if ((cat.OrderRecipe.Parts & CupBits.Straw) != 0 && !brewScored)
         {
             Status = BrewTiming ? "Stop in the green zone." : "Drag a straw onto the cup.";
             return;
@@ -2163,9 +2211,9 @@ public class CafeSession
         if (tea == 1)
             return "Black tea";
         if (tea == 2)
-            return "Green tea";
-        if (tea == 3)
             return "Matcha";
+        if (tea == 3)
+            return "Lavender tea";
         if (tea == 4)
             return "White tea";
         return "Tea";
@@ -2326,11 +2374,6 @@ public class CafeSession
         if (Endless)
             cost += (Day - 1) * CafeBalance.RentDayStep;
         return cost < 0 ? 0 : cost;
-    }
-
-    static int BasePay(DrinkType drink)
-    {
-        return DrinkRecipes.Get(drink).Pay;
     }
 
     static string UpgradeName(UpgradeType type)

@@ -218,8 +218,20 @@ PrefabInstance:
 '
       objectReference: {fileID: 0}
     - target: {fileID: 4178141231544489967, guid: 025ee4276bf09c74a99ee73fdcaf9d25, type: 3}
+      propertyPath: m_fontAsset
+      value: 
+      objectReference: {fileID: 11400000, guid: 45f6b2a4870a24d49b0af0ecca7b44f7, type: 2}
+    - target: {fileID: 4178141231544489967, guid: 025ee4276bf09c74a99ee73fdcaf9d25, type: 3}
       propertyPath: m_fontSizeBase
       value: 36
+      objectReference: {fileID: 0}
+    - target: {fileID: 4178141231544489967, guid: 025ee4276bf09c74a99ee73fdcaf9d25, type: 3}
+      propertyPath: m_sharedMaterial
+      value: 
+      objectReference: {fileID: -829845234136887535, guid: 45f6b2a4870a24d49b0af0ecca7b44f7, type: 2}
+    - target: {fileID: 4178141231544489967, guid: 025ee4276bf09c74a99ee73fdcaf9d25, type: 3}
+      propertyPath: m_hasFontAssetChanged
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8230746235756976948, guid: 025ee4276bf09c74a99ee73fdcaf9d25, type: 3}
       propertyPath: m_Name
@@ -859,33 +871,33 @@ MonoBehaviour:
     2. A lot of the late game mechanics don''t
     exist, like foreign coffee. I could only do so much ;-;
 
-    3. Many of the
-    machine steps are either simplified or don''t exist, for example Matcha (which
-    straight up replaces Lavender tea)
+    3. Many of the machine
+    steps are either simplified or don''t exist, for example Matcha (which straight
+    up replaces Green tea)
 
-    
 
-    Most notably, the main objective
-    of the original game - to buy the shop - is not the goal anymore (and would''ve
-    taken forever). Instead, choose between 2 modes:
 
-    
+    Most notably, the main objective of the original
+    game - to buy the shop - is not the goal anymore (and would''ve taken forever).
+    Instead, choose between 2 modes:
 
-    1. Casual mode:
-    Beat 3 shift days to win! Each day will feature increasingly complex mechanics.
-    Though a veteran player would still surely find it easy
 
-    2. Endless mode:
-    Survive for as many days as you can! Money can be spent to improve the cafe between
-    each day, and this will be much needed because the job will get harder and harder
-    to deal with as you go...
 
-    
+    1. Casual mode: Beat 3 shift days to
+    win! Each day will feature increasingly complex mechanics. Though a veteran player
+    would still surely find it easy
+
+    2. Endless mode: Survive for as many days
+    as you can! Money can be spent to improve the cafe between each day, and this
+    will be much needed because the job will get harder and harder to deal with as
+    you go...
+
+
 
     Hope you have funs <3'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: dd78ab4841841354ebddb582ffed6a81, type: 2}
-  m_sharedMaterial: {fileID: 643158298878983930, guid: dd78ab4841841354ebddb582ffed6a81, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 45f6b2a4870a24d49b0af0ecca7b44f7, type: 2}
+  m_sharedMaterial: {fileID: -829845234136887535, guid: 45f6b2a4870a24d49b0af0ecca7b44f7, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -921,7 +933,7 @@ MonoBehaviour:
   m_textAlignment: 65535
   m_characterSpacing: 0
   m_wordSpacing: 5
-  m_lineSpacing: 0
+  m_lineSpacing: -50
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
   m_charWidthMaxAdj: 0
@@ -950,7 +962,7 @@ MonoBehaviour:
   m_margin: {x: 0, y: 0, z: 0, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
-  m_hasFontAssetChanged: 0
+  m_hasFontAssetChanged: 1
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
 --- !u!222 &1023499360
@@ -1366,8 +1378,8 @@ MonoBehaviour:
 
     Meiboa'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: e6de2decb8c162f488c77c03308e5d6e, type: 2}
-  m_sharedMaterial: {fileID: -3295193048924056376, guid: e6de2decb8c162f488c77c03308e5d6e, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: cc324cee9216066438c5c3e3f30d5f77, type: 2}
+  m_sharedMaterial: {fileID: 27939861613275296, guid: cc324cee9216066438c5c3e3f30d5f77, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1397,7 +1409,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 0
   m_fontSizeMax: 230
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535

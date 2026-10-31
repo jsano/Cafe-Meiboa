@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public enum DayPhase
 {
@@ -49,7 +50,8 @@ public enum DrinkType
     VanillaMatchaLatte,
     IcedCaramelMatcha,
     AlmondMatchaLatte,
-    IcedChocolateMatcha
+    IcedChocolateMatcha,
+    LavenderTeaLatte
 }
 
 public enum PastryType
@@ -121,8 +123,8 @@ public enum TeaBits
 {
     None = 0,
     Black = 1 << 0,
-    Green = 1 << 1,
-    Matcha = 1 << 2,
+    Matcha = 1 << 1,
+    Lavender = 1 << 2,
     White = 1 << 3
 }
 
@@ -319,7 +321,7 @@ public static class DrinkRecipes
         text = Add(text, (int)syrups, (int)SyrupBits.Coconut, "Coconut");
         text = Add(text, (int)syrups, (int)SyrupBits.Almond, "Almond");
         text = Add(text, (int)teas, (int)TeaBits.Black, "Black tea");
-        text = Add(text, (int)teas, (int)TeaBits.Green, "Green tea");
+        text = Add(text, (int)teas, (int)TeaBits.Lavender, "Lavender tea");
         text = Add(text, (int)teas, (int)TeaBits.Matcha, "Matcha");
         text = Add(text, (int)teas, (int)TeaBits.White, "White tea");
         text = Add(text, (int)parts, (int)CupBits.HotWater, "Hot water");
@@ -376,7 +378,81 @@ public static class DrinkRecipes
         Make("Vanilla matcha latte", CupBits.Hot | CupBits.Steamed, SyrupBits.Vanilla, TeaBits.Matcha),
         Make("Iced caramel matcha", CupBits.Cold | CupBits.Milk | CupBits.Ice | CupBits.Straw, SyrupBits.Caramel, TeaBits.Matcha),
         Make("Almond matcha latte", CupBits.Hot | CupBits.Steamed, SyrupBits.Almond, TeaBits.Matcha),
-        Make("Iced chocolate matcha", CupBits.Cold | CupBits.Ice | CupBits.Milk | CupBits.Straw, SyrupBits.Chocolate, TeaBits.Matcha)
+        Make("Iced chocolate matcha", CupBits.Cold | CupBits.Ice | CupBits.Milk | CupBits.Straw, SyrupBits.Chocolate, TeaBits.Matcha),
+        Make("Lavender tea latte", CupBits.Hot | CupBits.Steamed, teas: TeaBits.Lavender)
+    };
+
+    static readonly SyrupBits[] syrupChoices =
+    {
+        SyrupBits.Chocolate,
+        SyrupBits.Vanilla,
+        SyrupBits.Strawberry,
+        SyrupBits.Caramel,
+        SyrupBits.WhiteChocolate,
+        SyrupBits.Coconut,
+        SyrupBits.Almond
+    };
+
+    static readonly TeaBits[] teaChoices =
+    {
+        TeaBits.Black,
+        TeaBits.Matcha,
+        TeaBits.Lavender,
+        TeaBits.White
+    };
+
+    public static DrinkRecipe RandomDrink()
+    {
+        CupBits parts = UnityEngine.Random.Range(0, 2) == 0 ? CupBits.Hot : CupBits.Cold;
+        parts |= Maybe(CupBits.Shot);
+        parts |= Maybe(CupBits.Coffee);
+        parts |= Maybe(CupBits.Milk);
+        parts |= Maybe(CupBits.Steamed);
+        parts |= OneOf(CupBits.HotWater, CupBits.ColdWater);
+        parts |= Maybe(CupBits.Ice);
+        parts |= Maybe(CupBits.Straw);
+
+        SyrupBits syrup = SyrupBits.None;
+        if (UnityEngine.Random.Range(0, 2) == 0)
+            syrup = syrupChoices[UnityEngine.Random.Range(0, syrupChoices.Length)];
+
+        TeaBits tea = TeaBits.None;
+        if (UnityEngine.Random.Range(0, 2) == 0)
+            tea = teaChoices[UnityEngine.Random.Range(0, teaChoices.Length)];
+
+        string name = randomDrinkNames[UnityEngine.Random.Range(0, randomDrinkNames.Length)];
+        return Make(name, parts, syrup, tea);
+    }
+
+    static CupBits Maybe(CupBits bit)
+    {
+        if (UnityEngine.Random.Range(0, 2) == 0)
+            return bit;
+        return CupBits.None;
+    }
+
+    static CupBits OneOf(CupBits first, CupBits second)
+    {
+        int roll = UnityEngine.Random.Range(0, 3);
+        if (roll == 1)
+            return first;
+        if (roll == 2)
+            return second;
+        return CupBits.None;
+    }
+
+    static readonly string[] randomDrinkNames = new string[] {
+        "Random BS",
+        "Bruh",
+        "*Meibao noise*",
+        "What is this",
+        "Fever dream",
+        "IDK man",
+        "Don't worry about it",
+        "My juices",
+        "Mystery liquid",
+        "Don't question it",
+        "Anything goes"
     };
 }
 
@@ -412,8 +488,6 @@ public static class CafeBalance
     public const float ThiefWindow = 5f;
     public const float ThiefHoldSeconds = 3f;
     public const float DogWindow = 8f;
-    public const float DogDelayMin = 6f;
-    public const float DogDelayMax = 32f;
     public const float RepairHoldSeconds = 1.6f;
     public const float MarkerSpeed = 0.62f;
     public const float PourMarkerSpeed = 0.26f;
@@ -430,6 +504,7 @@ public static class CafeBalance
     public const int BaseCustomers = 4;
     public const int CustomerStep = 2;
     public const int EndlessHealth = 5;
+    public const int RandomDrinkRoll = 3;
     public const float GrindSeconds = 4f;
     public const float EspressoSeconds = 4f;
     public const float CoffeeSeconds = 4f;

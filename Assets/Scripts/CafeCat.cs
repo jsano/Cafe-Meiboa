@@ -72,7 +72,7 @@ public class CafeCat : MonoBehaviour
         else if (session.Focus == index && cat.DrinkReady)
             SetDetail("Drag cup here", new Color(0.24f, 0.14f, 0.10f));
         else
-            SetDetail(DrinkRecipes.Get(cat.Drink).Steps, new Color(0.24f, 0.14f, 0.10f));
+            SetDetail(cat.OrderRecipe.Steps, new Color(0.24f, 0.14f, 0.10f));
 
         bool waiting = cat.Accepted && cat.PatienceMax > 0f;
         SetPatience(waiting, waiting ? Mathf.Clamp01(cat.Patience / cat.PatienceMax) : 0f);
