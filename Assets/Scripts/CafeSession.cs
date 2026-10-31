@@ -49,12 +49,11 @@ public class CafeSession
     public int Day = 1;
     public int Cash = CafeBalance.StartingCash;
     public int Beans;
-    public int BeanTotal;
     public int Milk;
-    public int MilkTotal;
     public int BrewLevel;
     public int PatienceLevel;
     public int RentLevel;
+    public int TimingLevel;
     public bool DogPresent;
     public float DogTime;
     public bool DogVisited;
@@ -173,12 +172,11 @@ public class CafeSession
         Day = 1;
         Cash = CafeBalance.StartingCash;
         Beans = 0;
-        BeanTotal = 0;
         Milk = 0;
-        MilkTotal = 0;
         BrewLevel = 0;
         PatienceLevel = 0;
         RentLevel = 0;
+        TimingLevel = 0;
         DogPresent = false;
         DogTime = 0f;
         DogVisited = false;
@@ -262,7 +260,6 @@ public class CafeSession
 
         Cash -= CafeBalance.BeanPackCost;
         Beans += CafeBalance.BeanPackSize;
-        BeanTotal += CafeBalance.BeanPackSize;
         Status = "Bought 4 beans.";
     }
 
@@ -278,8 +275,7 @@ public class CafeSession
 
         Cash -= CafeBalance.MilkPackCost;
         Milk += CafeBalance.MilkPackSize;
-        MilkTotal += CafeBalance.MilkPackSize;
-        Status = "Bought 4 milk. Lattes can show up from day 2.";
+        Status = "Bought 4 milk.";
     }
 
     public void BuyUpgrade(UpgradeType type)
@@ -312,6 +308,8 @@ public class CafeSession
             return PatienceLevel;
         if (type == UpgradeType.CheaperRent)
             return RentLevel;
+        if (type == UpgradeType.SlowerMark)
+            return TimingLevel;
         return 0;
     }
 
@@ -329,6 +327,8 @@ public class CafeSession
             return Mathf.Approximately(PatienceUpgrade(level), PatienceUpgrade(level + 1));
         if (type == UpgradeType.CheaperRent)
             return RentUpgrade(level) == RentUpgrade(level + 1);
+        if (type == UpgradeType.SlowerMark)
+            return Mathf.Approximately(MarkerScale(level), MarkerScale(level + 1));
         return true;
     }
 
@@ -422,7 +422,6 @@ public class CafeSession
                 : "Ring the bell for a customer. A thief may grab the till.";
         }
 
-        ClearStation();
         Phase = DayPhase.Shift;
     }
 
@@ -1143,11 +1142,12 @@ public class CafeSession
 
     public string UpgradeLabel()
     {
-        if (BrewLevel == 0 && PatienceLevel == 0 && RentLevel == 0)
+        if (BrewLevel == 0 && PatienceLevel == 0 && RentLevel == 0 && TimingLevel == 0)
             return "none";
         return "Brew " + BrewLevel
             + ", Patience " + PatienceLevel
-            + ", Rent " + RentLevel;
+            + ", Rent " + RentLevel
+            + ", Mark " + TimingLevel;
     }
 
     public string PastryChoiceLabel(int index)
@@ -1173,6 +1173,7 @@ public class CafeSession
                 + "   machines " + Seconds(GrindDuration)
                 + "   toast " + Seconds(ToastDuration)
                 + "   rent $" + RentDue
+                + "   mark " + MarkerSpeedAt(TimingLevel).ToString("0.00")
                 + "   health " + Health;
         }
         return text;
@@ -1219,7 +1220,6 @@ public class CafeSession
         Phase = DayPhase.Shop;
         for (int i = 0; i < PastryChoice.Length; i++)
             PastryChoice[i] = 0;
-        Array.Clear(PastryStock, 0, PastryStock.Length);
 
         if (rewardIfReady && PayQuestBonus())
             Status = "Quest bonus +15. " + ShopIntro();
@@ -1384,7 +1384,7 @@ public class CafeSession
         if (SyrupTiming)
         {
             SyrupLeft -= dt;
-            Marker01 -= CafeBalance.SyrupFallSpeed * dt;
+            Marker01 -= CafeBalance.SyrupFallSpeed * MarkerPace() * dt;
             if (Marker01 < 0f)
                 Marker01 = 0f;
             if (SyrupLeft <= 0f)
@@ -1397,7 +1397,7 @@ public class CafeSession
 
         if (VerticalTiming)
         {
-            Marker01 += CafeBalance.PourMarkerSpeed * dt;
+            Marker01 += CafeBalance.PourMarkerSpeed * MarkerPace() * dt;
             if (Marker01 >= 1f)
             {
                 Marker01 = 1f;
@@ -1406,7 +1406,7 @@ public class CafeSession
             return;
         }
 
-        float speed = CafeBalance.MarkerSpeed;
+        float speed = CafeBalance.MarkerSpeed * MarkerPace();
         Marker01 += markerDir * speed * dt;
         if (Marker01 >= 1f)
         {
@@ -1703,7 +1703,6 @@ public class CafeSession
         Phase = DayPhase.CloseOfDay;
         Focus = -1;
         ResetBrew();
-        ClearStation();
         repairHeld = false;
         DogPresent = false;
         heldSlot = -1;
@@ -2213,6 +2212,8 @@ public class CafeSession
             PatienceLevel++;
         else if (type == UpgradeType.CheaperRent)
             RentLevel++;
+        else if (type == UpgradeType.SlowerMark)
+            TimingLevel++;
     }
 
     string UpgradeStat(UpgradeType type, int level)
@@ -2224,6 +2225,8 @@ public class CafeSession
             return "cats wait " + Mathf.RoundToInt(PatienceAt(level)) + "s";
         if (type == UpgradeType.CheaperRent)
             return "dog charges $" + RentAt(level);
+        if (type == UpgradeType.SlowerMark)
+            return "mark " + MarkerSpeedAt(level).ToString("0.00");
         return "";
     }
 
@@ -2244,6 +2247,8 @@ public class CafeSession
         }
         if (type == UpgradeType.CheaperRent)
             return "dog charges $" + RentAt(level) + " to $" + RentAt(next);
+        if (type == UpgradeType.SlowerMark)
+            return "mark " + MarkerSpeedAt(level).ToString("0.00") + " to " + MarkerSpeedAt(next).ToString("0.00");
         return "";
     }
 
@@ -2258,6 +2263,27 @@ public class CafeSession
         if (Endless)
             time += (Day - 1) * CafeBalance.MachineDayStep;
         return Mathf.Max(0f, time);
+    }
+
+    static float MarkerScale(int level)
+    {
+        return Mathf.Max(1f - CafeBalance.MarkerSlowStep * level, CafeBalance.MarkerSlowMin);
+    }
+
+    float MarkerPace()
+    {
+        float pace = MarkerScale(TimingLevel);
+        if (Endless)
+            pace += (Day - 1) * CafeBalance.MarkerDayStep;
+        return Mathf.Max(0f, pace);
+    }
+
+    float MarkerSpeedAt(int level)
+    {
+        float pace = MarkerScale(level);
+        if (Endless)
+            pace += (Day - 1) * CafeBalance.MarkerDayStep;
+        return Mathf.Max(0f, CafeBalance.MarkerSpeed * pace);
     }
 
     static float MachineScale(int level)
@@ -2315,6 +2341,8 @@ public class CafeSession
             return "Longer patience";
         if (type == UpgradeType.CheaperRent)
             return "Cheaper rent";
+        if (type == UpgradeType.SlowerMark)
+            return "Slower mark";
         return "None";
     }
 

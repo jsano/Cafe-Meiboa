@@ -18,6 +18,7 @@ public class CafeHud : MonoBehaviour
     [SerializeField] TextMeshProUGUI fasterLabel;
     [SerializeField] TextMeshProUGUI patienceLabel;
     [SerializeField] TextMeshProUGUI rentUpgradeLabel;
+    [SerializeField] TextMeshProUGUI timingLabel;
     [SerializeField] GameObject dogRow;
     [SerializeField] Button payButton;
     [SerializeField] TextMeshProUGUI payLabel;
@@ -28,6 +29,7 @@ public class CafeHud : MonoBehaviour
     [SerializeField] Button fasterButton;
     [SerializeField] Button patienceButton;
     [SerializeField] Button rentUpgradeButton;
+    [SerializeField] Button timingButton;
     [SerializeField] Button openButton;
     [SerializeField] Button actionButton;
     [SerializeField] Button closeButton;
@@ -85,10 +87,11 @@ public class CafeHud : MonoBehaviour
         Wire(fasterButton, () => session.BuyUpgrade(UpgradeType.FasterBrew));
         Wire(patienceButton, () => session.BuyUpgrade(UpgradeType.LongerPatience));
         Wire(rentUpgradeButton, () => session.BuyUpgrade(UpgradeType.CheaperRent));
+        Wire(timingButton, () => session.BuyUpgrade(UpgradeType.SlowerMark));
 
         Wire(payButton, session.PayRent);
         Wire(openButton, session.OpenCafe);
-        LiftDogPrompt();
+        PlaceDogInStation();
         Wire(actionButton, session.PressStation);
         Wire(closeButton, session.Continue);
         Wire(playAgainButton, () => SceneManager.LoadScene("Title"));
@@ -149,12 +152,16 @@ public class CafeHud : MonoBehaviour
         fasterLabel.text = session.UpgradeOffer(UpgradeType.FasterBrew);
         patienceLabel.text = session.UpgradeOffer(UpgradeType.LongerPatience);
         rentUpgradeLabel.text = session.UpgradeOffer(UpgradeType.CheaperRent);
+        if (timingLabel != null)
+            timingLabel.text = session.UpgradeOffer(UpgradeType.SlowerMark);
         if (fasterButton != null)
             fasterButton.interactable = !session.UpgradeMaxed(UpgradeType.FasterBrew);
         if (patienceButton != null)
             patienceButton.interactable = !session.UpgradeMaxed(UpgradeType.LongerPatience);
         if (rentUpgradeButton != null)
             rentUpgradeButton.interactable = !session.UpgradeMaxed(UpgradeType.CheaperRent);
+        if (timingButton != null)
+            timingButton.interactable = !session.UpgradeMaxed(UpgradeType.SlowerMark);
 
         openLabel.text = "Open cafe";
     }
@@ -176,35 +183,90 @@ public class CafeHud : MonoBehaviour
             payLabel.text = "Pay the black dog  ($" + session.RentDue + ")";
     }
 
-    void LiftDogPrompt()
+    void PlaceDogInStation()
     {
-        if (dogLifted || dogRow == null || payButton == null || shopRoot == null)
+        if (dogLifted || dogRow == null || payButton == null || stationRoot == null)
             return;
 
-        RectTransform parent = shopRoot.transform.parent as RectTransform;
-        if (parent == null)
-            return;
+        Transform rows = stationRoot.transform.Find("Rows");
+        if (rows == null)
+            rows = stationRoot.transform;
 
         dogCaption = dogRow.GetComponentInChildren<TextMeshProUGUI>(true);
         if (dogCaption != null)
             dogCaption.enableWordWrapping = true;
-        PlacePrompt(dogRow.GetComponent<RectTransform>(), parent, 0.02f, 0.52f, 0.22f, 0.72f);
-        PlacePrompt(payButton.GetComponent<RectTransform>(), parent, 0.02f, 0.40f, 0.22f, 0.51f);
+
+        RectTransform dogRect = dogRow.GetComponent<RectTransform>();
+        RectTransform payRect = payButton.GetComponent<RectTransform>();
+        dogRect.SetParent(rows, false);
+        payRect.SetParent(rows, false);
+        FitStationRow(dogRect, dogRow.GetComponent<LayoutElement>(), 64f);
+        FitStationRow(payRect, payButton.GetComponent<LayoutElement>(), 44f);
+        dogRect.SetAsLastSibling();
+        payRect.SetAsLastSibling();
         dogRow.SetActive(false);
         payButton.gameObject.SetActive(false);
         dogLifted = true;
     }
 
-    static void PlacePrompt(RectTransform rect, RectTransform parent, float xMin, float yMin, float xMax, float yMax)
+    void LayoutDog(bool vertical)
+    {
+        if (!dogLifted || dogRow == null || payButton == null)
+            return;
+
+        RectTransform dogRect = dogRow.GetComponent<RectTransform>();
+        RectTransform payRect = payButton.GetComponent<RectTransform>();
+        LayoutElement dogLayout = dogRow.GetComponent<LayoutElement>();
+        LayoutElement payLayout = payButton.GetComponent<LayoutElement>();
+        if (!vertical)
+        {
+            FitStationRow(dogRect, dogLayout, 64f);
+            FitStationRow(payRect, payLayout, 44f);
+            dogRect.SetAsLastSibling();
+            payRect.SetAsLastSibling();
+            return;
+        }
+
+        float right = 16f;
+        float dogHeight = 64f;
+        float payHeight = 44f;
+        float gap = 8f;
+        float statusBottom = VerticalTrackTop + VerticalTrackHeight + 16f + savedStatusSize.y;
+        float dogCenter = statusBottom + gap + dogHeight * 0.5f;
+        float payCenter = dogCenter + dogHeight * 0.5f + gap + payHeight * 0.5f;
+        PlaceBelowTiming(dogRect, dogLayout, dogCenter, dogHeight, right);
+        PlaceBelowTiming(payRect, payLayout, payCenter, payHeight, right);
+    }
+
+    static void FitStationRow(RectTransform rect, LayoutElement layout, float height)
     {
         if (rect == null)
             return;
+        if (layout != null)
+        {
+            layout.ignoreLayout = false;
+            layout.minHeight = height;
+            layout.preferredHeight = height;
+        }
 
-        rect.SetParent(parent, false);
-        rect.anchorMin = new Vector2(xMin, yMin);
-        rect.anchorMax = new Vector2(xMax, yMax);
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(550f, height);
+    }
+
+    static void PlaceBelowTiming(RectTransform rect, LayoutElement layout, float centerFromTop, float height, float right)
+    {
+        if (rect == null)
+            return;
+        if (layout != null)
+            layout.ignoreLayout = true;
+
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(-(VerticalContentLeft + right), height);
+        rect.anchoredPosition = new Vector2((VerticalContentLeft - right) * 0.5f, -centerFromTop);
         rect.SetAsLastSibling();
     }
 
@@ -243,6 +305,7 @@ public class CafeHud : MonoBehaviour
         marker.gameObject.SetActive(session.BrewTiming);
         ShowTimingTrack(session.BrewTiming);
         RefreshSyrupTimer();
+        LayoutDog(vertical);
 
         if (actionButton != null)
             actionButton.gameObject.SetActive(session.BrewTiming);

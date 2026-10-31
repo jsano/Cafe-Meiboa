@@ -73,7 +73,8 @@ public enum UpgradeType
     None,
     FasterBrew,
     LongerPatience,
-    CheaperRent
+    CheaperRent,
+    SlowerMark
 }
 
 public enum BreakStation
@@ -404,9 +405,9 @@ public static class CafeBalance
     public const int QuestGoal = 5;
     public const int ThiefSteal = 12;
 
-    public const float PatienceSeconds = 23f;
+    public const float PatienceSeconds = 3.0f;
     public const float PatienceStep = 3f;
-    public const float PatienceMax = 35f;
+    public const float PatienceMax = 4.2f;
     public const float PatienceDayStep = 2f;
     public const float ThiefWindow = 5f;
     public const float ThiefHoldSeconds = 3f;
@@ -416,6 +417,9 @@ public static class CafeBalance
     public const float RepairHoldSeconds = 1.6f;
     public const float MarkerSpeed = 0.62f;
     public const float PourMarkerSpeed = 0.26f;
+    public const float MarkerSlowStep = 0.10f;
+    public const float MarkerSlowMin = 0.60f;
+    public const float MarkerDayStep = 0.08f;
     public const float SyrupSeconds = 5f;
     public const float SyrupFallSpeed = 0.18f;
     public const float SyrupBump = 0.13f;

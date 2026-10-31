@@ -33,6 +33,7 @@ public class CafeBoard : MonoBehaviour
     [SerializeField] Sprite beansSprite;
     [SerializeField] Sprite coffeeSprite;
     [SerializeField] Sprite strawSprite;
+    [SerializeField] Sprite tempSprite;
     [SerializeField] CafeHotspot[] hotspots;
     [SerializeField] SpriteRenderer[] cupMarks;
     [SerializeField] Collider2D bell;
@@ -59,6 +60,7 @@ public class CafeBoard : MonoBehaviour
     SpriteRenderer puckMark;
     SpriteRenderer espressoPuckMark;
     SpriteRenderer coffeeMark;
+    SpriteRenderer steamedMark;
     Sprite placeholderSprite;
     Vector3 placeholderScale;
 
@@ -285,18 +287,18 @@ public class CafeBoard : MonoBehaviour
         if (session == null)
             return;
 
-        SetCount(beanCount, session.Beans, session.BeanTotal);
-        SetCount(coffeeCount, session.CoffeeUses, CafeBalance.CoffeeBatch);
-        SetCount(iceCount, session.IceUses, CafeBalance.IceBatch);
-        SetCount(milkCount, session.Milk, session.MilkTotal);
+        SetCount(beanCount, session.Beans);
+        SetCount(coffeeCount, session.CoffeeUses);
+        SetCount(iceCount, session.IceUses);
+        SetCount(milkCount, session.Milk);
     }
 
-    static void SetCount(TextMeshProUGUI label, int remaining, int total)
+    static void SetCount(TextMeshProUGUI label, int amount)
     {
         if (label == null)
             return;
 
-        label.text = remaining + " / " + total;
+        label.text = "x" + amount;
     }
 
     void WireHotspots()
@@ -818,6 +820,11 @@ public class CafeBoard : MonoBehaviour
         ShowStationSprite(puckMark, puckSpot, puckSprite, session.PuckReady && !holdingPuck);
         ShowStationSprite(espressoPuckMark, espressoSpot, puckSprite, (session.EspressoBusy || session.EspressoShots > 0) && !Holding(CafeSpot.Espresso));
         ShowStationSprite(coffeeMark, coffeeSpot, coffeeSprite, session.CoffeeUses > 0 && !session.CoffeeBusy);
+       
+        if (steamedMark == null)
+            return;
+        steamedMark.enabled = true;
+        steamedMark.gameObject.SetActive(session.SteamedServings > 0 && !Holding(CafeSpot.SteamedMilk));
     }
 
     bool Holding(CafeSpot spot, int index = -1)
@@ -1013,6 +1020,7 @@ public class CafeBoard : MonoBehaviour
     CafeHotspot puckSpot;
     CafeHotspot espressoSpot;
     CafeHotspot coffeeSpot;
+    CafeHotspot steamedSpot;
 
     void EnsureStationMarks()
     {
@@ -1020,7 +1028,7 @@ public class CafeBoard : MonoBehaviour
             return;
 
         RememberStation(hotspots);
-        if (waterSpot == null || toastSpot == null || plateSpot == null || puckSpot == null || espressoSpot == null || coffeeSpot == null)
+        if (waterSpot == null || toastSpot == null || plateSpot == null || puckSpot == null || espressoSpot == null || coffeeSpot == null || steamedSpot == null)
             RememberStation(FindObjectsByType<CafeHotspot>(FindObjectsInactive.Include, FindObjectsSortMode.None));
 
         if (waterSpot != null && waterMark == null)
@@ -1035,6 +1043,8 @@ public class CafeBoard : MonoBehaviour
             espressoPuckMark = MakeStationMark(espressoSpot.transform, "EspressoPuckMark");
         if (coffeeSpot != null && coffeeMark == null)
             coffeeMark = MakeStationMark(coffeeSpot.transform, "CoffeeMark");
+        if (steamedSpot != null && steamedMark == null)
+            steamedMark = FindChildRenderer(steamedSpot.transform, "steamedmark");
     }
 
     void RememberStation(CafeHotspot[] spots)
@@ -1059,7 +1069,31 @@ public class CafeBoard : MonoBehaviour
                 espressoSpot = hotspot;
             else if (hotspot.Spot == CafeSpot.Coffee)
                 coffeeSpot = hotspot;
+            else if (hotspot.Spot == CafeSpot.SteamedMilk)
+                steamedSpot = hotspot;
         }
+    }
+
+    static SpriteRenderer FindChildRenderer(Transform root, string childName)
+    {
+        if (root == null)
+            return null;
+
+        Transform[] all = root.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i] == root)
+                continue;
+            if (!string.Equals(all[i].name, childName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            SpriteRenderer renderer = all[i].GetComponent<SpriteRenderer>();
+            if (renderer == null)
+                renderer = all[i].GetComponentInChildren<SpriteRenderer>(true);
+            return renderer;
+        }
+
+        return null;
     }
 
     SpriteRenderer MakeStationMark(Transform parent, string name)
