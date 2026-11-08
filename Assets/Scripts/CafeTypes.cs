@@ -193,6 +193,36 @@ public struct DrinkRecipe
         if (cup == null || !cup.Occupied)
             return false;
 
+        CupBits have = BitsFrom(cup);
+        return have == Parts && cup.Syrup == Syrups && cup.Tea == Teas;
+    }
+
+    public string MismatchLabel(TrayCup cup)
+    {
+        if (cup == null || !cup.Occupied)
+            return "They don't want that.";
+
+        CupBits have = BitsFrom(cup);
+        string missing = DrinkRecipes.ListIngredients(Parts & ~have, Syrups & ~cup.Syrup, Teas & ~cup.Tea);
+        string unwanted = DrinkRecipes.ListIngredients(have & ~Parts, cup.Syrup & ~Syrups, cup.Tea & ~Teas);
+
+        if (missing.Length == 0 && unwanted.Length == 0)
+            return "They don't want that.";
+
+        string text = "";
+        if (missing.Length > 0)
+            text += "Missing:\n" + missing;
+        if (unwanted.Length > 0)
+        {
+            if (text.Length > 0)
+                text += "\n\n";
+            text += "Unwanted:\n" + unwanted;
+        }
+        return text;
+    }
+
+    static CupBits BitsFrom(TrayCup cup)
+    {
         CupBits have = cup.Hot ? CupBits.Hot : CupBits.Cold;
         if (cup.Shot)
             have |= CupBits.Shot;
@@ -210,7 +240,12 @@ public struct DrinkRecipe
             have |= CupBits.Milk;
         if (cup.SteamedMilk)
             have |= CupBits.Steamed;
-        return have == Parts && cup.Syrup == Syrups && cup.Tea == Teas;
+        return have;
+    }
+
+    public bool SameIngredients(DrinkRecipe other)
+    {
+        return Parts == other.Parts && Syrups == other.Syrups && Teas == other.Teas;
     }
 
     public CustomerKind Kind
@@ -306,9 +341,11 @@ public static class DrinkRecipes
         return recipe;
     }
 
-    static string Describe(CupBits parts, SyrupBits syrups, TeaBits teas)
+    public static string ListIngredients(CupBits parts, SyrupBits syrups, TeaBits teas)
     {
-        string text = (parts & CupBits.Hot) != 0 ? "Hot cup" : "Cold cup";
+        string text = "";
+        text = Add(text, (int)parts, (int)CupBits.Hot, "Hot cup");
+        text = Add(text, (int)parts, (int)CupBits.Cold, "Cold cup");
         text = Add(text, (int)parts, (int)CupBits.Shot, "Espresso");
         text = Add(text, (int)parts, (int)CupBits.Coffee, "Coffee");
         text = Add(text, (int)parts, (int)CupBits.Milk, "Milk");
@@ -331,11 +368,16 @@ public static class DrinkRecipes
         return text;
     }
 
+    static string Describe(CupBits parts, SyrupBits syrups, TeaBits teas)
+    {
+        return ListIngredients(parts, syrups, teas);
+    }
+
     static string Add(string text, int bits, int flag, string label)
     {
         if ((bits & flag) == 0)
             return text;
-        return text + "\n" + label;
+        return text.Length == 0 ? label : text + "\n" + label;
     }
 
     static readonly DrinkRecipe[] table =
@@ -481,9 +523,9 @@ public static class CafeBalance
     public const int QuestGoal = 5;
     public const int ThiefSteal = 12;
 
-    public const float PatienceSeconds = 30f;
+    public const float PatienceSeconds = 45f;
     public const float PatienceStep = 3f;
-    public const float PatienceMax = 42f;
+    public const float PatienceMax = 60f;
     public const float PatienceDayStep = 2f;
     public const float ThiefWindow = 5f;
     public const float ThiefHoldSeconds = 3f;

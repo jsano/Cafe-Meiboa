@@ -78,6 +78,7 @@ public class CafeHud : MonoBehaviour
     const float VerticalContentLeft = 108f;
     GameObject syrupTimerRoot;
     Image syrupTimerFill;
+    GameObject dimRoot;
 
     public void Bind(CafeSession cafeSession)
     {
@@ -120,6 +121,7 @@ public class CafeHud : MonoBehaviour
         closeRoot.SetActive(session.Phase == DayPhase.CloseOfDay);
         summaryRoot.SetActive(session.Phase == DayPhase.Summary);
         leftNote.gameObject.SetActive(!shift);
+        RefreshDim(shop || (shift && session.BrewTiming));
 
         hudText.text = "Day " + session.Day
             + (session.Endless ? "        Health " + session.Health : "")
@@ -314,6 +316,70 @@ public class CafeHud : MonoBehaviour
         repairRoot.SetActive(showRepair);
         repairFill.fillAmount = Mathf.Clamp01(session.Repair01);
         repairCaption.text = "Hold to repair";
+    }
+
+    void RefreshDim(bool show)
+    {
+        EnsureDim();
+        if (dimRoot == null)
+            return;
+
+        dimRoot.SetActive(show);
+        if (!show)
+            return;
+
+        // Keep the dim under Shop and Station so those panels stay bright and clickable.
+        Transform above = shopRoot != null ? shopRoot.transform : stationRoot != null ? stationRoot.transform : null;
+        if (above == null)
+            return;
+
+        int aboveIndex = above.GetSiblingIndex();
+        int dimIndex = dimRoot.transform.GetSiblingIndex();
+        if (dimIndex > aboveIndex)
+            dimRoot.transform.SetSiblingIndex(aboveIndex);
+        else
+            dimRoot.transform.SetSiblingIndex(Mathf.Max(0, aboveIndex - 1));
+    }
+
+    void EnsureDim()
+    {
+        if (dimRoot != null)
+            return;
+
+        Transform parent = null;
+        if (stationRoot != null)
+            parent = stationRoot.transform.parent;
+        else if (shopRoot != null)
+            parent = shopRoot.transform.parent;
+        if (parent == null)
+            return;
+
+        Sprite sprite = null;
+        if (closeRoot != null)
+        {
+            Image closeImage = closeRoot.GetComponent<Image>();
+            if (closeImage != null)
+                sprite = closeImage.sprite;
+        }
+        if (sprite == null && greenZone != null)
+        {
+            Image zone = greenZone.GetComponent<Image>();
+            if (zone != null)
+                sprite = zone.sprite;
+        }
+
+        dimRoot = new GameObject("Dim", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        dimRoot.transform.SetParent(parent, false);
+        RectTransform rect = dimRoot.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        Image image = dimRoot.GetComponent<Image>();
+        image.sprite = sprite;
+        image.color = new Color(0.1f, 0.06f, 0.04f, 0.72f);
+        image.raycastTarget = true;
+        dimRoot.SetActive(false);
     }
 
     void RefreshClose()

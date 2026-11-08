@@ -329,9 +329,11 @@ public class CafeBoard : MonoBehaviour
             return;
 
         bool shop = session != null && session.Phase == DayPhase.Shop;
+        bool timing = session != null && session.BrewTiming;
+        bool locked = shop || timing;
         Pan();
-        heldSlot = !shop && LeftHeld() && !dragging ? CatUnderCursor() : -1;
-        if (shop)
+        heldSlot = !locked && LeftHeld() && !dragging ? CatUnderCursor() : -1;
+        if (locked)
         {
             if (dragging)
                 CancelDrag();
@@ -359,7 +361,7 @@ public class CafeBoard : MonoBehaviour
         }
         FollowGhost();
         SyncCups();
-        ApplyDim(shop);
+        ApplyDim(locked);
         SyncStations();
         SyncCounters();
         SyncCircleTimers();
@@ -411,9 +413,9 @@ public class CafeBoard : MonoBehaviour
         return IsCupMark(renderer) || renderer == waterMark || renderer == toastMark || renderer == plateMark;
     }
 
-    void ApplyDim(bool shop)
+    void ApplyDim(bool dim)
     {
-        float mul = shop ? ShopDim : 1f;
+        float mul = dim ? ShopDim : 1f;
         for (int i = 0; i < boardSprites.Length; i++)
         {
             SpriteRenderer renderer = boardSprites[i];
@@ -423,7 +425,7 @@ public class CafeBoard : MonoBehaviour
             renderer.color = new Color(color.r * mul, color.g * mul, color.b * mul, color.a);
         }
 
-        if (!shop || cupMarks == null)
+        if (!dim || cupMarks == null)
             return;
 
         for (int i = 0; i < cupMarks.Length; i++)
@@ -598,6 +600,12 @@ public class CafeBoard : MonoBehaviour
         if (customer >= 0 && spot.Spot == CafeSpot.Tray)
         {
             session.OfferCup(customer, spot.Index);
+            return;
+        }
+
+        if (customer >= 0 && spot.Spot == CafeSpot.WaterTray)
+        {
+            session.OfferWaterCup(customer);
             return;
         }
 

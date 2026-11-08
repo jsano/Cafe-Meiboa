@@ -158,6 +158,8 @@ public class CafeSession
     public int ActiveTray = -1;
     public readonly TrayCup[] Trays = { new TrayCup(), new TrayCup(), new TrayCup() };
 
+    const int WaterActive = -2;
+
     bool brewScored;
     bool strawTiming;
     bool pourOnWater;
@@ -562,7 +564,10 @@ public class CafeSession
             return;
         }
 
-        PourShotInto(WaterCup);
+        if (!PourShotInto(WaterCup))
+            return;
+
+        TryFinishDrink();
     }
 
     public void PourCoffee(int tray)
@@ -588,7 +593,10 @@ public class CafeSession
             return;
         }
 
-        PourInto(WaterCup);
+        if (!PourInto(WaterCup))
+            return;
+
+        TryFinishDrink();
     }
 
     public void InsertWaterCup(bool hot)
@@ -658,8 +666,8 @@ public class CafeSession
 
         Trays[tray].CopyFrom(WaterCup);
         WaterCup.Clear();
-        if (waterCupWasActive)
-            ActiveTray = tray;
+        if (ActiveTray == WaterActive)
+            ActiveTray = -1;
         waterCupWasActive = false;
         Status = "Cup set on tray " + (tray + 1) + ".";
         TryFinishDrink();
@@ -682,10 +690,11 @@ public class CafeSession
 
         WaterCup.CopyFrom(Trays[tray]);
         Trays[tray].Clear();
-        waterCupWasActive = ActiveTray == tray;
-        if (waterCupWasActive)
-            ActiveTray = -1;
+        if (ActiveTray == tray)
+            ActiveTray = WaterActive;
+        waterCupWasActive = ActiveTray == WaterActive;
         Status = "Moved the cup to the water tray.";
+        TryFinishDrink();
     }
 
     public void TrashWaterCup()
@@ -704,9 +713,11 @@ public class CafeSession
             VerticalTiming = false;
         }
 
-        bool cancel = waterCupWasActive || brewScored || FocusReady;
+        bool cancel = ActiveTray == WaterActive || waterCupWasActive || brewScored || FocusReady;
         WaterCup.Clear();
         waterCupWasActive = false;
+        if (ActiveTray == WaterActive)
+            ActiveTray = -1;
         if (!cancel)
         {
             Status = "Tossed the cup.";
@@ -1603,7 +1614,7 @@ public class CafeSession
         if (queue.Count == 0)
             return;
 
-        QueuedOrder order = queue.Dequeue();
+        QueuedOrder order = UniqueOrder(queue.Dequeue(), slot);
         Customer cat = Slots[slot];
         cat.Clear();
         cat.Occupied = true;
@@ -1612,6 +1623,71 @@ public class CafeSession
         cat.Recipe = order.Recipe;
         cat.WantedPastry = order.Pastry;
         customersSpawned++;
+    }
+
+    QueuedOrder UniqueOrder(QueuedOrder order, int slot)
+    {
+        for (int attempt = 0; attempt < 48; attempt++)
+        {
+            if (!OrderConflicts(order, slot))
+                return order;
+            order = RerollOrder(order);
+        }
+
+        return order;
+    }
+
+    bool OrderConflicts(QueuedOrder order, int slot)
+    {
+        for (int i = 0; i < Slots.Length; i++)
+        {
+            if (i == slot)
+                continue;
+            Customer other = Slots[i];
+            if (!other.Occupied || other.IsThief)
+                continue;
+            if (SameOrderIngredients(other, order))
+                return true;
+        }
+
+        return false;
+    }
+
+    static bool SameOrderIngredients(Customer cat, QueuedOrder order)
+    {
+        bool catPastry = cat.WantedPastry != PastryType.None;
+        bool orderPastry = order.Pastry != PastryType.None;
+        if (catPastry || orderPastry)
+            return catPastry && orderPastry && cat.WantedPastry == order.Pastry;
+
+        DrinkRecipe recipe = !string.IsNullOrEmpty(order.Recipe.Name)
+            ? order.Recipe
+            : DrinkRecipes.Get(order.Drink);
+        return cat.OrderRecipe.SameIngredients(recipe);
+    }
+
+    QueuedOrder RerollOrder(QueuedOrder order)
+    {
+        if (order.Pastry != PastryType.None)
+        {
+            order.Pastry = RandomPastry();
+            order.Drink = DrinkType.BlackCoffee;
+            order.Recipe = default;
+            order.Kind = CustomerKind.Regular;
+            return order;
+        }
+
+        if (Endless && UnityEngine.Random.Range(0, CafeBalance.RandomDrinkRoll) == 0)
+            order.Recipe = DrinkRecipes.RandomDrink();
+        else
+        {
+            order.Drink = DrinkFor();
+            order.Recipe = DrinkRecipes.Get(order.Drink);
+        }
+
+        order.Pastry = PastryType.None;
+        order.Kind = order.Recipe.Kind;
+        return order;
     }
 
     float ScoreMarker()
@@ -1980,6 +2056,14 @@ public class CafeSession
 
     void ClearServedCup()
     {
+        if (ActiveTray == WaterActive)
+        {
+            WaterCup.Clear();
+            waterCupWasActive = false;
+            ActiveTray = -1;
+            return;
+        }
+
         int tray = ActiveTray;
         if (tray < 0)
         {
@@ -1993,6 +2077,7 @@ public class CafeSession
         }
         if (tray >= 0 && tray < Trays.Length)
             Trays[tray].Clear();
+        ActiveTray = -1;
     }
 
     bool CupReady(int tray)
@@ -2042,11 +2127,13 @@ public class CafeSession
             break;
         }
 
-        if (tray < 0)
+        bool waterReady = WaterCup.Occupied && cat.OrderRecipe.Matches(WaterCup);
+        if (tray < 0 && !waterReady)
         {
             cat.DrinkReady = false;
             FocusReady = false;
             ActiveTray = -1;
+            waterCupWasActive = false;
             return false;
         }
 
@@ -2058,14 +2145,32 @@ public class CafeSession
         {
             cat.DrinkReady = false;
             FocusReady = false;
-            ActiveTray = tray;
+            if (tray >= 0)
+            {
+                ActiveTray = tray;
+                waterCupWasActive = false;
+            }
+            else
+            {
+                ActiveTray = WaterActive;
+                waterCupWasActive = true;
+            }
             return false;
         }
 
         bool newlyReady = !cat.DrinkReady;
         cat.DrinkReady = true;
         FocusReady = true;
-        ActiveTray = tray;
+        if (tray >= 0)
+        {
+            ActiveTray = tray;
+            waterCupWasActive = false;
+        }
+        else
+        {
+            ActiveTray = WaterActive;
+            waterCupWasActive = true;
+        }
         if (newlyReady)
             Status = "Ready. Drag the cup to the cat.";
         return true;
@@ -2078,40 +2183,62 @@ public class CafeSession
         if (tray < 0 || tray >= Trays.Length || !Trays[tray].Occupied)
             return;
 
+        if (!CanOfferCup(index, Trays[tray]))
+            return;
+
+        ActiveTray = tray;
+        Serve(index);
+    }
+
+    public void OfferWaterCup(int index)
+    {
+        if (Phase != DayPhase.Shift || index < 0 || index >= Slots.Length)
+            return;
+        if (!WaterCup.Occupied)
+            return;
+
+        if (!CanOfferCup(index, WaterCup))
+            return;
+
+        ActiveTray = WaterActive;
+        Serve(index);
+    }
+
+    bool CanOfferCup(int index, TrayCup cup)
+    {
         Customer cat = Slots[index];
         if (!cat.Occupied || cat.IsThief)
         {
             Status = "They don't want a drink.";
-            return;
+            return false;
         }
         if (!cat.Accepted)
         {
             Status = "Take the order before you hand it over.";
-            return;
+            return false;
         }
         if (cat.WantedPastry != PastryType.None)
         {
             Status = "They don't want a drink.";
-            return;
+            return false;
         }
-        if (!cat.OrderRecipe.Matches(Trays[tray]))
+        if (!cat.OrderRecipe.Matches(cup))
         {
-            Status = "They don't want that.";
-            return;
+            Status = cat.OrderRecipe.MismatchLabel(cup);
+            return false;
         }
         if (BrewTiming)
         {
             Status = "Stop in the green zone.";
-            return;
+            return false;
         }
         if ((cat.OrderRecipe.Parts & CupBits.Straw) != 0 && !brewScored)
         {
             Status = BrewTiming ? "Stop in the green zone." : "Drag a straw onto the cup.";
-            return;
+            return false;
         }
 
-        ActiveTray = tray;
-        Serve(index);
+        return true;
     }
 
     public bool OfferPastry(int index, bool fromPlate)
